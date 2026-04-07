@@ -202,7 +202,7 @@ const isEditModalOpen = ref(false)
 
 // 新飞行记录数据
 const newFlightRecord = ref({
-  drone: '',
+  drone: 0,
   startTime: new Date().toISOString().slice(0, 16),
   endTime: new Date().toISOString().slice(0, 16),
   duration: '00:00:00',
@@ -213,8 +213,8 @@ const newFlightRecord = ref({
 
 // 编辑飞行记录数据
 const editingFlightRecord = ref<FlightRecord>({
-  id: '',
-  drone: '',
+  id: 0,
+  drone: 0,
   startTime: new Date().toISOString().slice(0, 16),
   endTime: new Date().toISOString().slice(0, 16),
   duration: '00:00:00',
@@ -273,7 +273,7 @@ const loadStatistics = async () => {
 // 打开添加模态框
 const openAddModal = () => {
   newFlightRecord.value = {
-    drone: drones.value.length > 0 ? drones.value[0].id : '',
+    drone: drones.value.length > 0 ? drones.value[0].id : 0,
     startTime: new Date().toISOString().slice(0, 16),
     endTime: new Date().toISOString().slice(0, 16),
     duration: '00:00:00',
@@ -322,7 +322,7 @@ const updateFlightRecord = async () => {
 }
 
 // 删除飞行记录
-const deleteFlightRecord = async (id: string) => {
+const deleteFlightRecord = async (id: number) => {
   if (confirm('确定要删除这个飞行记录吗？')) {
     try {
       await flightDataAPI.deleteFlightRecord(id)
@@ -335,7 +335,7 @@ const deleteFlightRecord = async (id: string) => {
 }
 
 // 获取无人机名称
-const getDroneName = (droneId: string): string => {
+const getDroneName = (droneId: number): string => {
   const drone = drones.value.find(d => d.id === droneId)
   return drone ? drone.name : '未知'
 }

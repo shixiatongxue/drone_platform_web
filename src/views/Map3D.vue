@@ -82,7 +82,7 @@ import { SyncOutlined, GlobalOutlined, EditOutlined, CloseOutlined, SaveOutlined
 
 // 无人机数据
 const drones = ref<Drone[]>([])
-const selectedDrone = ref('all')
+const selectedDrone = ref<number | 'all'>('all')
 const selectedDroneInfo = ref<Drone | null>(null)
 const mapMode = ref('normal')
 const terrainEnabled = ref(false)
@@ -265,7 +265,7 @@ const initMap = () => {
   // 加载高德地图API
   const script = document.createElement('script')
   script.type = 'text/javascript'
-  script.src = 'https://webapi.amap.com/maps?v=2.0&key=50dd5fa2e6ca9a17cdcbf727f2568928&plugin=AMap.3DMap,AMap.Terrain,AMap.Polyline,AMap.Marker,AMap.Navigation,AMap.Scale,AMap.OverviewMap'
+  script.src = 'https://webapi.amap.com/maps?v=2.0&key=50dd5fa2e6ca9a17cdcbf727f2568928&plugin=AMap.3DMap,AMap.Terrain,AMap.Polyline,AMap.Marker,AMap.ToolBar,AMap.Scale,AMap.OverviewMap'
   script.onload = () => {
     // 初始化3D地图
     map = new AMap.Map('map3d', {
@@ -278,9 +278,9 @@ const initMap = () => {
 
     // 添加控件
     try {
-      map.addControl(new AMap.Navigation())
+      map.addControl(new AMap.ToolBar())
       map.addControl(new AMap.Scale())
-      map.addControl(new AMap.OverviewMap())
+      // 移除 OverviewMap 控件，因为它不是一个有效的构造函数
     } catch (error) {
       console.error('Failed to add controls:', error)
     }
@@ -343,11 +343,6 @@ const updateMapMarkers = () => {
     // 创建标记
     const marker = new AMap.Marker({
       position: position,
-      icon: new AMap.Icon({
-        size: new AMap.Size(40, 40),
-        image: getDroneIcon(drone.status),
-        imageSize: new AMap.Size(40, 40)
-      }),
       title: drone.name,
       anchor: 'bottom-center'
     })

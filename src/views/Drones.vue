@@ -171,7 +171,7 @@ const newDrone = ref({
 
 // 编辑无人机数据
 const editingDrone = ref<Drone>({
-  id: '',
+  id: 0,
   name: '',
   model: '',
   status: 'offline',
@@ -245,7 +245,7 @@ const updateDrone = async () => {
 }
 
 // 删除无人机
-const deleteDrone = async (id: string) => {
+const deleteDrone = async (id: number) => {
   if (confirm('确定要删除这个无人机吗？')) {
     try {
       await droneAPI.deleteDrone(id)

@@ -14,22 +14,27 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     throw new Error(`API request failed: ${response.status}`);
   }
 
+  // 对于204 No Content响应，直接返回undefined
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return response.json();
 }
 
 // 无人机相关API
 export const droneAPI = {
   getDrones: () => request<Drone[]>('/drones'),
-  getDrone: (id: string) => request<Drone>(`/drones/${id}`),
+  getDrone: (id: number) => request<Drone>(`/drones/${id}`),
   createDrone: (drone: Omit<Drone, 'id'>) => request<Drone>('/drones', {
     method: 'POST',
     body: JSON.stringify(drone),
   }),
-  updateDrone: (id: string, drone: Partial<Drone>) => request<Drone>(`/drones/${id}`, {
+  updateDrone: (id: number, drone: Partial<Drone>) => request<Drone>(`/drones/${id}`, {
     method: 'PUT',
     body: JSON.stringify(drone),
   }),
-  deleteDrone: (id: string) => request<void>(`/drones/${id}`, {
+  deleteDrone: (id: number) => request<void>(`/drones/${id}`, {
     method: 'DELETE',
   }),
   getOnlineDrones: () => request<Drone[]>('/drones/online'),
@@ -38,62 +43,62 @@ export const droneAPI = {
 // 任务相关API
 export const taskAPI = {
   getTasks: () => request<Task[]>('/tasks'),
-  getTask: (id: string) => request<Task>(`/tasks/${id}`),
+  getTask: (id: number) => request<Task>(`/tasks/${id}`),
   createTask: (task: Omit<Task, 'id'>) => request<Task>('/tasks', {
     method: 'POST',
     body: JSON.stringify(task),
   }),
-  updateTask: (id: string, task: Partial<Task>) => request<Task>(`/tasks/${id}`, {
+  updateTask: (id: number, task: Partial<Task>) => request<Task>(`/tasks/${id}`, {
     method: 'PUT',
     body: JSON.stringify(task),
   }),
-  updateTaskStatus: (id: string, status: string) => request<Task>(`/tasks/${id}/status`, {
+  updateTaskStatus: (id: number, status: string) => request<Task>(`/tasks/${id}/status`, {
     method: 'PUT',
     body: JSON.stringify(status),
   }),
-  deleteTask: (id: string) => request<void>(`/tasks/${id}`, {
+  deleteTask: (id: number) => request<void>(`/tasks/${id}`, {
     method: 'DELETE',
   }),
-  getTasksByDroneId: (droneId: string) => request<Task[]>(`/tasks/drone/${droneId}`),
+  getTasksByDroneId: (droneId: number) => request<Task[]>(`/tasks/drone/${droneId}`),
   getTasksByStatus: (status: string) => request<Task[]>(`/tasks/status/${status}`),
 };
 
 // 飞行数据相关API
 export const flightDataAPI = {
   getFlightRecords: () => request<FlightRecord[]>('/flight-data'),
-  getFlightRecord: (id: string) => request<FlightRecord>(`/flight-data/${id}`),
+  getFlightRecord: (id: number) => request<FlightRecord>(`/flight-data/${id}`),
   createFlightRecord: (record: Omit<FlightRecord, 'id'>) => request<FlightRecord>('/flight-data', {
     method: 'POST',
     body: JSON.stringify(record),
   }),
-  updateFlightRecord: (id: string, record: Partial<FlightRecord>) => request<FlightRecord>(`/flight-data/${id}`, {
+  updateFlightRecord: (id: number, record: Partial<FlightRecord>) => request<FlightRecord>(`/flight-data/${id}`, {
     method: 'PUT',
     body: JSON.stringify(record),
   }),
-  deleteFlightRecord: (id: string) => request<void>(`/flight-data/${id}`, {
+  deleteFlightRecord: (id: number) => request<void>(`/flight-data/${id}`, {
     method: 'DELETE',
   }),
-  getFlightRecordsByDroneId: (droneId: string) => request<FlightRecord[]>(`/flight-data/drone/${droneId}`),
+  getFlightRecordsByDroneId: (droneId: number) => request<FlightRecord[]>(`/flight-data/drone/${droneId}`),
   getFlightStatistics: () => request<FlightStatistics>('/flight-data/statistics'),
 };
 
 // 用户相关API
 export const userAPI = {
   getUsers: () => request<User[]>('/users'),
-  getUser: (id: string) => request<User>(`/users/${id}`),
+  getUser: (id: number) => request<User>(`/users/${id}`),
   createUser: (user: Omit<User, 'id'>) => request<User>('/users', {
     method: 'POST',
     body: JSON.stringify(user),
   }),
-  updateUser: (id: string, user: Partial<User>) => request<User>(`/users/${id}`, {
+  updateUser: (id: number, user: Partial<User>) => request<User>(`/users/${id}`, {
     method: 'PUT',
     body: JSON.stringify(user),
   }),
-  updatePassword: (id: string, newPassword: string) => request<User>(`/users/${id}/password`, {
+  updatePassword: (id: number, newPassword: string) => request<User>(`/users/${id}/password`, {
     method: 'PUT',
     body: JSON.stringify(newPassword),
   }),
-  deleteUser: (id: string) => request<void>(`/users/${id}`, {
+  deleteUser: (id: number) => request<void>(`/users/${id}`, {
     method: 'DELETE',
   }),
   getUsersByRole: (role: string) => request<User[]>(`/users/role/${role}`),
@@ -101,7 +106,7 @@ export const userAPI = {
 
 // 类型定义
 export interface Drone {
-  id: string;
+  id: number;
   name: string;
   model: string;
   status: 'online' | 'offline' | 'flying';
@@ -113,12 +118,12 @@ export interface Drone {
 }
 
 export interface Task {
-  id: string;
+  id: number;
   name: string;
   description: string;
   status: 'pending' | 'in-progress' | 'completed';
-  drone: string;
-  template?: string;
+  drone: number;
+  template?: number;
   startTime?: string;
   endTime?: string;
   route?: string;
@@ -127,8 +132,8 @@ export interface Task {
 }
 
 export interface FlightRecord {
-  id: string;
-  drone: string;
+  id: number;
+  drone: number;
   startTime: string;
   endTime?: string;
   duration: string;
@@ -148,7 +153,7 @@ export interface FlightStatistics {
 }
 
 export interface User {
-  id: string;
+  id: number;
   username: string;
   password: string;
   role: 'admin' | 'operator' | 'viewer';

@@ -187,7 +187,7 @@ const newTask = ref({
   name: '',
   description: '',
   status: 'pending' as 'pending' | 'in-progress' | 'completed',
-  drone: '',
+  drone: 0,
   startTime: new Date().toISOString().slice(0, 16),
   endTime: new Date().toISOString().slice(0, 16),
   route: ''
@@ -195,11 +195,11 @@ const newTask = ref({
 
 // 编辑任务数据
 const editingTask = ref<Task>({
-  id: '',
+  id: 0,
   name: '',
   description: '',
   status: 'pending',
-  drone: '',
+  drone: 0,
   startTime: new Date().toISOString().slice(0, 16),
   endTime: new Date().toISOString().slice(0, 16),
   route: ''
@@ -249,7 +249,7 @@ const openAddModal = () => {
     name: '',
     description: '',
     status: 'pending',
-    drone: drones.value.length > 0 ? drones.value[0].id : '',
+    drone: drones.value.length > 0 ? drones.value[0].id : 0,
     startTime: new Date().toISOString().slice(0, 16),
     endTime: new Date().toISOString().slice(0, 16),
     route: ''
@@ -293,7 +293,7 @@ const updateTask = async () => {
 }
 
 // 删除任务
-const deleteTask = async (id: string) => {
+const deleteTask = async (id: number) => {
   if (confirm('确定要删除这个任务吗？')) {
     try {
       await taskAPI.deleteTask(id)
@@ -305,7 +305,7 @@ const deleteTask = async (id: string) => {
 }
 
 // 更新任务状态
-const updateTaskStatus = async (id: string, status: string) => {
+const updateTaskStatus = async (id: number, status: string) => {
   try {
     await taskAPI.updateTaskStatus(id, status)
     loadTasks()
@@ -343,7 +343,7 @@ const getNextStatusText = (currentStatus: string): string => {
 }
 
 // 获取无人机名称
-const getDroneName = (droneId: string): string => {
+const getDroneName = (droneId: number): string => {
   const drone = drones.value.find(d => d.id === droneId)
   return drone ? drone.name : '未知'
 }
