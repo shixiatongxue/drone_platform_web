@@ -30,6 +30,10 @@
           <template #icon><ControlOutlined /></template>
           指挥矩阵
         </a-menu-item>
+        <a-menu-item key="/users">
+          <template #icon><UserOutlined /></template>
+          用户管理
+        </a-menu-item>
       </a-menu>
     </a-layout-sider>
     <a-layout>
@@ -42,15 +46,15 @@
               </a-button>
             </a-dropdown>
           </div>
-          <div class="header-right">
+          <div class="header-right" v-if="user">
             <a-badge count="3" style="margin-right: 16px;">
               <BellOutlined style="font-size: 18px; color: #666;" />
             </a-badge>
             <a-avatar size="small" style="margin-right: 16px;">
               <template #icon><UserOutlined /></template>
             </a-avatar>
-            <span style="margin-right: 16px;">管理员</span>
-            <a-button type="text">退出</a-button>
+            <span style="margin-right: 16px;">{{ user.name || user.username }}</span>
+            <a-button type="text" @click="handleLogout">退出</a-button>
           </div>
         </div>
       </a-layout-header>
@@ -63,17 +67,36 @@
 
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { RobotOutlined, ScheduleOutlined, AreaChartOutlined, EnvironmentOutlined, ControlOutlined, SettingOutlined, BellOutlined, UserOutlined } from '@ant-design/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
+const user = ref<any>(null)
 
 const currentRoute = computed(() => route.path)
 
 const handleMenuSelect = (info: any) => {
   router.push(info.key)
 }
+
+const handleLogout = () => {
+  // 清除本地存储的用户信息
+  localStorage.removeItem('user')
+  // 重定向到登录页
+  router.push('/login')
+}
+
+const loadUser = () => {
+  const userStr = localStorage.getItem('user')
+  if (userStr) {
+    user.value = JSON.parse(userStr)
+  }
+}
+
+onMounted(() => {
+  loadUser()
+})
 </script>
 
 <style>

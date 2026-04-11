@@ -102,6 +102,10 @@ export const userAPI = {
     method: 'DELETE',
   }),
   getUsersByRole: (role: string) => request<User[]>(`/users/role/${role}`),
+  login: (username: string, password: string) => request<{ message: string; user: User }>('/users/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  }),
 };
 
 // 类型定义

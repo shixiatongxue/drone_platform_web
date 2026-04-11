@@ -2,9 +2,14 @@
   <div class="flight-data-container">
     <div class="flight-data-header">
       <h2>飞行数据管理</h2>
-      <button class="add-button" @click="openAddModal">
-        添加飞行记录
-      </button>
+      <div class="header-buttons">
+        <button class="add-button" @click="openAddModal">
+          添加飞行记录
+        </button>
+        <button class="export-button" @click="exportToPDF">
+          导出PDF
+        </button>
+      </div>
     </div>
     <div class="flight-data-filters">
       <select v-model="droneFilter" class="filter-select">
@@ -49,22 +54,31 @@
       </div>
       <div class="chart-row">
         <div class="chart-container">
-          <h3>无人机飞行次数</h3>
-          <div ref="droneFlightsChartRef" class="chart"></div>
+          <h3>飞行高度变化示意图</h3>
+          <div ref="altitudeChangeChartRef" class="chart"></div>
         </div>
         <div class="chart-container">
           <h3>电池消耗分析</h3>
           <div ref="batteryChartRef" class="chart"></div>
         </div>
       </div>
-      <div class="chart-row">
-        <div class="chart-container">
-          <h3>各无人机飞行时长对比</h3>
-          <div ref="droneDurationChartRef" class="chart"></div>
+      <!-- 只有选择所有无人机时才显示的图表 -->
+      <div v-if="droneFilter === 'all'">
+        <div class="chart-row">
+          <div class="chart-container">
+            <h3>无人机飞行次数</h3>
+            <div ref="droneFlightsChartRef" class="chart"></div>
+          </div>
+          <div class="chart-container">
+            <h3>各无人机飞行时长对比</h3>
+            <div ref="droneDurationChartRef" class="chart"></div>
+          </div>
         </div>
-        <div class="chart-container">
-          <h3>各无人机平均飞行高度</h3>
-          <div ref="droneAltitudeChartRef" class="chart"></div>
+        <div class="chart-row">
+          <div class="chart-container">
+            <h3>各无人机平均飞行高度</h3>
+            <div ref="droneAltitudeChartRef" class="chart"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -214,6 +228,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { flightDataAPI, droneAPI, FlightRecord, Drone, FlightStatistics } from '../services/api'
 import * as echarts from 'echarts'
+import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 
 // 飞行记录数据
 const flightRecords = ref<FlightRecord[]>([])
@@ -226,16 +242,18 @@ const showCharts = ref(true)
 // 图表引用
 const durationChartRef = ref<HTMLElement>()
 const altitudeChartRef = ref<HTMLElement>()
-const droneFlightsChartRef = ref<HTMLElement>()
 const batteryChartRef = ref<HTMLElement>()
+const altitudeChangeChartRef = ref<HTMLElement>()
+const droneFlightsChartRef = ref<HTMLElement>()
 const droneDurationChartRef = ref<HTMLElement>()
 const droneAltitudeChartRef = ref<HTMLElement>()
 
 // 图表实例
 let durationChart: echarts.ECharts | null = null
 let altitudeChart: echarts.ECharts | null = null
-let droneFlightsChart: echarts.ECharts | null = null
 let batteryChart: echarts.ECharts | null = null
+let altitudeChangeChart: echarts.ECharts | null = null
+let droneFlightsChart: echarts.ECharts | null = null
 let droneDurationChart: echarts.ECharts | null = null
 let droneAltitudeChart: echarts.ECharts | null = null
 
@@ -316,11 +334,57 @@ const loadDrones = async () => {
 }
 
 // 加载统计数据
-const loadStatistics = async () => {
+const loadStatistics = async (droneId?: string) => {
   try {
-    statistics.value = await flightDataAPI.getFlightStatistics()
+    if (droneId && droneId !== 'all') {
+      // 这里需要后端提供根据无人机ID获取统计数据的API
+      // 暂时使用前端计算的方式
+      const filteredRecords = flightRecords.value.filter(record => record.drone === parseInt(droneId))
+      calculateStatistics(filteredRecords)
+    } else {
+      statistics.value = await flightDataAPI.getFlightStatistics()
+    }
   } catch (error) {
     console.error('Failed to load statistics:', error)
+  }
+}
+
+// 计算统计数据
+const calculateStatistics = (records: FlightRecord[]) => {
+  if (records.length === 0) {
+    statistics.value = {
+      totalFlights: 0,
+      totalDuration: 0,
+      maxAltitude: 0,
+      maxSpeed: 0,
+      avgBatteryConsumption: 0
+    }
+    return
+  }
+
+  const totalFlights = records.length
+  
+  // 计算总飞行时间（分钟）
+  const totalDurationMinutes = records.reduce((total, record) => {
+    const parts = record.duration.split(':')
+    return total + parseInt(parts[0]) * 60 + parseInt(parts[1]) + parseInt(parts[2]) / 60
+  }, 0)
+  
+  // 计算最高飞行高度
+  const maxAltitude = Math.max(...records.map(record => record.maxAltitude))
+  
+  // 计算最高飞行速度
+  const maxSpeed = Math.max(...records.map(record => record.maxSpeed))
+  
+  // 计算平均电池消耗
+  const avgBatteryConsumption = records.reduce((sum, record) => sum + record.batteryConsumption, 0) / records.length
+
+  statistics.value = {
+    totalFlights,
+    totalDuration: Math.round(totalDurationMinutes),
+    maxAltitude,
+    maxSpeed,
+    avgBatteryConsumption: parseFloat(avgBatteryConsumption.toFixed(1))
   }
 }
 
@@ -357,7 +421,7 @@ const addFlightRecord = async () => {
     await flightDataAPI.createFlightRecord(newFlightRecord.value)
     isAddModalOpen.value = false
     await loadFlightRecords()
-    await loadStatistics()
+    await loadStatistics(droneFilter.value)
   } catch (error) {
     console.error('Failed to add flight record:', error)
   }
@@ -369,7 +433,7 @@ const updateFlightRecord = async () => {
     await flightDataAPI.updateFlightRecord(editingFlightRecord.value.id, editingFlightRecord.value)
     isEditModalOpen.value = false
     await loadFlightRecords()
-    await loadStatistics()
+    await loadStatistics(droneFilter.value)
   } catch (error) {
     console.error('Failed to update flight record:', error)
   }
@@ -381,7 +445,7 @@ const deleteFlightRecord = async (id: number) => {
     try {
       await flightDataAPI.deleteFlightRecord(id)
       await loadFlightRecords()
-      await loadStatistics()
+      await loadStatistics(droneFilter.value)
     } catch (error) {
       console.error('Failed to delete flight record:', error)
     }
@@ -408,11 +472,14 @@ const initCharts = () => {
   if (altitudeChartRef.value) {
     altitudeChart = echarts.init(altitudeChartRef.value)
   }
-  if (droneFlightsChartRef.value) {
-    droneFlightsChart = echarts.init(droneFlightsChartRef.value)
-  }
   if (batteryChartRef.value) {
     batteryChart = echarts.init(batteryChartRef.value)
+  }
+  if (altitudeChangeChartRef.value) {
+    altitudeChangeChart = echarts.init(altitudeChangeChartRef.value)
+  }
+  if (droneFlightsChartRef.value) {
+    droneFlightsChart = echarts.init(droneFlightsChartRef.value)
   }
   if (droneDurationChartRef.value) {
     droneDurationChart = echarts.init(droneDurationChartRef.value)
@@ -427,8 +494,9 @@ const initCharts = () => {
 const updateCharts = () => {
   updateDurationChart()
   updateAltitudeChart()
-  updateDroneFlightsChart()
   updateBatteryChart()
+  updateAltitudeChangeChart()
+  updateDroneFlightsChart()
   updateDroneDurationChart()
   updateDroneAltitudeChart()
 }
@@ -566,6 +634,148 @@ const updateAltitudeChart = () => {
   altitudeChart.setOption(option)
 }
 
+// 更新电池消耗分析图表
+const updateBatteryChart = () => {
+  if (!batteryChart) return
+  
+  const filteredRecords = getFilteredRecords()
+  
+  // 按日期排序飞行记录
+  const sortedRecords = [...filteredRecords].sort((a, b) => 
+    new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  )
+  
+  const dates = sortedRecords.map(record => {
+    const date = new Date(record.startTime)
+    return `${date.getMonth() + 1}/${date.getDate()}`
+  })
+  
+  const batteryConsumptions = sortedRecords.map(record => record.batteryConsumption)
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: '{b}: {c}%'
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLabel: {
+        rotate: 45
+      }
+    },
+    yAxis: {
+      type: 'value',
+      name: '电池消耗（%）',
+      min: 0,
+      max: 100
+    },
+    series: [
+      {
+        name: '电池消耗',
+        type: 'line',
+        data: batteryConsumptions,
+        smooth: true,
+        lineStyle: {
+          color: '#faad14'
+        },
+        symbol: 'circle',
+        symbolSize: 6,
+        itemStyle: {
+          color: '#faad14'
+        },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(250, 173, 20, 0.6)' },
+            { offset: 1, color: 'rgba(250, 173, 20, 0.1)' }
+          ])
+        }
+      }
+    ]
+  }
+  
+  batteryChart.setOption(option)
+}
+
+// 更新飞行高度变化示意图
+const updateAltitudeChangeChart = () => {
+  if (!altitudeChangeChart) return
+  
+  const filteredRecords = getFilteredRecords()
+  
+  // 按日期排序飞行记录
+  const sortedRecords = [...filteredRecords].sort((a, b) => 
+    new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  )
+  
+  const dates = sortedRecords.map(record => {
+    const date = new Date(record.startTime)
+    return `${date.getMonth() + 1}/${date.getDate()}`
+  })
+  
+  const altitudes = sortedRecords.map(record => record.maxAltitude)
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: '{b}: {c} 米'
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLabel: {
+        rotate: 45
+      }
+    },
+    yAxis: {
+      type: 'value',
+      name: '飞行高度（米）'
+    },
+    series: [
+      {
+        name: '飞行高度',
+        type: 'line',
+        data: altitudes,
+        smooth: true,
+        lineStyle: {
+          color: '#1890ff',
+          width: 3
+        },
+        symbol: 'circle',
+        symbolSize: 8,
+        itemStyle: {
+          color: '#1890ff'
+        },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(24, 144, 255, 0.6)' },
+            { offset: 1, color: 'rgba(24, 144, 255, 0.1)' }
+          ])
+        },
+        label: {
+          show: true,
+          position: 'top',
+          formatter: '{c} 米'
+        }
+      }
+    ]
+  }
+  
+  altitudeChangeChart.setOption(option)
+}
+
 // 更新无人机飞行次数图表
 const updateDroneFlightsChart = () => {
   if (!droneFlightsChart) return
@@ -618,77 +828,6 @@ const updateDroneFlightsChart = () => {
   }
   
   droneFlightsChart.setOption(option)
-}
-
-// 更新电池消耗分析图表
-const updateBatteryChart = () => {
-  if (!batteryChart) return
-  
-  const filteredRecords = getFilteredRecords()
-  const droneBatteryConsumption = new Map<number, number[]>()
-  filteredRecords.forEach(record => {
-    if (!droneBatteryConsumption.has(record.drone)) {
-      droneBatteryConsumption.set(record.drone, [])
-    }
-    droneBatteryConsumption.get(record.drone)?.push(record.batteryConsumption)
-  })
-  
-  const droneNames = Array.from(droneBatteryConsumption.keys()).map(droneId => 
-    getDroneName(droneId)
-  )
-  const series = droneNames.map((name, index) => {
-    const droneId = Array.from(droneBatteryConsumption.keys())[index]
-    const consumptions = droneBatteryConsumption.get(droneId) || []
-    return {
-      name,
-      type: 'boxplot',
-      data: [
-        [
-          Math.min(...consumptions),
-          consumptions.sort((a, b) => a - b)[Math.floor(consumptions.length * 0.25)],
-          consumptions.sort((a, b) => a - b)[Math.floor(consumptions.length * 0.5)],
-          consumptions.sort((a, b) => a - b)[Math.floor(consumptions.length * 0.75)],
-          Math.max(...consumptions)
-        ]
-      ]
-    }
-  })
-  
-  const option = {
-    tooltip: {
-      trigger: 'item',
-      axisPointer: {
-        type: 'shadow'
-      }
-    },
-    grid: {
-      left: '10%',
-      right: '10%',
-      bottom: '15%'
-    },
-    xAxis: {
-      type: 'category',
-      data: droneNames,
-      boundaryGap: true,
-      nameGap: 30,
-      splitArea: {
-        show: false
-      },
-      splitLine: {
-        show: false
-      }
-    },
-    yAxis: {
-      type: 'value',
-      name: '电池消耗（%）',
-      splitArea: {
-        show: true
-      }
-    },
-    series
-  }
-  
-  batteryChart.setOption(option)
 }
 
 // 更新各无人机飞行时长对比图表
@@ -856,7 +995,7 @@ const filterInvalidFlightRecords = async () => {
   // 重新加载数据
   if (invalidRecords.length > 0) {
     await loadFlightRecords()
-    await loadStatistics()
+    await loadStatistics(droneFilter.value)
     updateCharts()
   }
 }
@@ -901,7 +1040,7 @@ const generateMoreFlightData = async () => {
   
   // 重新加载数据
   await loadFlightRecords()
-  await loadStatistics()
+  await loadStatistics(droneFilter.value)
   updateCharts()
   
   // 过滤无效的飞行记录
@@ -912,7 +1051,7 @@ const generateMoreFlightData = async () => {
 onMounted(async () => {
   await loadDrones()
   await loadFlightRecords()
-  await loadStatistics()
+  await loadStatistics(droneFilter.value)
   
   // 过滤无效的飞行记录
   await filterInvalidFlightRecords()
@@ -931,8 +1070,9 @@ onMounted(async () => {
 const handleResize = () => {
   durationChart?.resize()
   altitudeChart?.resize()
-  droneFlightsChart?.resize()
   batteryChart?.resize()
+  altitudeChangeChart?.resize()
+  droneFlightsChart?.resize()
   droneDurationChart?.resize()
   droneAltitudeChart?.resize()
 }
@@ -942,8 +1082,9 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   durationChart?.dispose()
   altitudeChart?.dispose()
-  droneFlightsChart?.dispose()
   batteryChart?.dispose()
+  altitudeChangeChart?.dispose()
+  droneFlightsChart?.dispose()
   droneDurationChart?.dispose()
   droneAltitudeChart?.dispose()
 })
@@ -961,15 +1102,94 @@ watch(
 watch(
   droneFilter,
   (newValue) => {
-    showCharts.value = (newValue === 'all')
-    // 当切换到"所有无人机"时，延迟重新初始化图表，确保DOM已经渲染完成
-    if (newValue === 'all') {
-      setTimeout(() => {
-        initCharts()
-      }, 100)
-    }
+    // 无论选择哪个无人机，都显示图表
+    showCharts.value = true
+    // 重新加载统计数据
+    loadStatistics(newValue)
+    // 延迟重新初始化图表，确保DOM已经渲染完成
+    setTimeout(() => {
+      initCharts()
+    }, 100)
   }
 )
+
+// 导出为PDF
+const exportToPDF = async () => {
+  try {
+    // 显示所有图表，以便导出时包含所有内容
+    const originalShowCharts = showCharts.value
+    showCharts.value = true
+    
+    // 确保图表已经渲染完成
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // 获取要导出的内容
+    const element = document.querySelector('.flight-data-container')
+    if (!element) return
+    
+    // 使用html2canvas将内容转换为图片
+    const canvas = await html2canvas(element, {
+      scale: 2, // 提高清晰度
+      useCORS: true, // 允许加载跨域图片
+      logging: false
+    })
+    
+    // 创建PDF
+    const pdf = new jsPDF({
+      orientation: 'landscape', // 横向
+      unit: 'mm',
+      format: 'a4'
+    })
+    
+    // 计算PDF页面尺寸
+    const pdfWidth = pdf.internal.pageSize.getWidth()
+    const pdfHeight = pdf.internal.pageSize.getHeight()
+    
+    // 计算图片尺寸，保持比例
+    const imgWidth = pdfWidth - 20 // 左右边距
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    
+    // 如果图片高度超过PDF页面高度，需要分页
+    let heightLeft = imgHeight
+    let position = 10 // 上边距
+    
+    // 添加第一张图片
+    pdf.addImage(
+      canvas.toDataURL('image/png'),
+      'PNG',
+      10, // 左边距
+      position,
+      imgWidth,
+      imgHeight
+    )
+    
+    heightLeft -= pdfHeight - 20 // 减去页面高度和上下边距
+    
+    // 如果需要，添加更多页面
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight
+      pdf.addPage()
+      pdf.addImage(
+        canvas.toDataURL('image/png'),
+        'PNG',
+        10,
+        position,
+        imgWidth,
+        imgHeight
+      )
+      heightLeft -= pdfHeight - 20
+    }
+    
+    // 导出PDF
+    const droneName = droneFilter.value === 'all' ? '所有无人机' : getDroneName(parseInt(droneFilter.value))
+    pdf.save(`${droneName}_飞行数据报表_${new Date().toISOString().slice(0, 10)}.pdf`)
+    
+    // 恢复原始状态
+    showCharts.value = originalShowCharts
+  } catch (error) {
+    console.error('Failed to export PDF:', error)
+  }
+}
 </script>
 
 <style scoped>
@@ -991,6 +1211,11 @@ watch(
   color: #333;
 }
 
+.header-buttons {
+  display: flex;
+  gap: 10px;
+}
+
 .add-button {
   padding: 8px 16px;
   background-color: #1890ff;
@@ -1003,6 +1228,20 @@ watch(
 
 .add-button:hover {
   background-color: #40a9ff;
+}
+
+.export-button {
+  padding: 8px 16px;
+  background-color: #52c41a;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.export-button:hover {
+  background-color: #73d13d;
 }
 
 .flight-data-filters {
