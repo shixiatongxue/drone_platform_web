@@ -30,8 +30,8 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="task in filteredTasks" :key="task.id">
-            <td>{{ task.id }}</td>
+          <tr v-for="(task, index) in filteredTasks" :key="task.id">
+            <td>{{ index + 1 }}</td>
             <td>{{ task.name }}</td>
             <td>{{ task.description }}</td>
             <td>

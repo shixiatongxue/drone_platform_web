@@ -3,6 +3,7 @@ import Drones from '../views/Drones.vue'
 import Tasks from '../views/Tasks.vue'
 import FlightData from '../views/FlightData.vue'
 import Map3D from '../views/Map3D.vue'
+import ControlMatrix from '../views/ControlMatrix.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -33,9 +34,9 @@ const router = createRouter({
       component: Map3D
     },
     {
-      path: '/command',
-      name: 'command',
-      component: () => import('../views/Command.vue')
+      path: '/control-matrix',
+      name: 'control-matrix',
+      component: ControlMatrix
     }
   ]
 })

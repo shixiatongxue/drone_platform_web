@@ -24,8 +24,8 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="drone in filteredDrones" :key="drone.id">
-            <td>{{ drone.id }}</td>
+          <tr v-for="(drone, index) in filteredDrones" :key="drone.id">
+            <td>{{ index + 1 }}</td>
             <td>{{ drone.name }}</td>
             <td>{{ drone.model }}</td>
             <td>

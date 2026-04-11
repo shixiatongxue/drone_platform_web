@@ -26,7 +26,7 @@
           <template #icon><EnvironmentOutlined /></template>
           3D态势图
         </a-menu-item>
-        <a-menu-item key="/command">
+        <a-menu-item key="/control-matrix">
           <template #icon><ControlOutlined /></template>
           指挥矩阵
         </a-menu-item>
