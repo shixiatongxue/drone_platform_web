@@ -336,14 +336,11 @@ const loadDrones = async () => {
 // 加载统计数据
 const loadStatistics = async (droneId?: string) => {
   try {
-    if (droneId && droneId !== 'all') {
-      // 这里需要后端提供根据无人机ID获取统计数据的API
-      // 暂时使用前端计算的方式
-      const filteredRecords = flightRecords.value.filter(record => record.drone === parseInt(droneId))
-      calculateStatistics(filteredRecords)
-    } else {
-      statistics.value = await flightDataAPI.getFlightStatistics()
-    }
+    // 始终使用前端计算的方式，确保统计数据的一致性
+    const filteredRecords = droneId && droneId !== 'all' 
+      ? flightRecords.value.filter(record => record.drone === parseInt(droneId))
+      : flightRecords.value
+    calculateStatistics(filteredRecords)
   } catch (error) {
     console.error('Failed to load statistics:', error)
   }
@@ -366,8 +363,15 @@ const calculateStatistics = (records: FlightRecord[]) => {
   
   // 计算总飞行时间（分钟）
   const totalDurationMinutes = records.reduce((total, record) => {
-    const parts = record.duration.split(':')
-    return total + parseInt(parts[0]) * 60 + parseInt(parts[1]) + parseInt(parts[2]) / 60
+    const durationStr = record.duration
+    if (durationStr.includes(':')) {
+      // HH:MM:SS格式
+      const parts = durationStr.split(':')
+      return total + parseInt(parts[0]) * 60 + parseInt(parts[1]) + parseInt(parts[2]) / 60
+    } else {
+      // 直接是分钟数
+      return total + parseFloat(durationStr)
+    }
   }, 0)
   
   // 计算最高飞行高度
@@ -748,7 +752,7 @@ const updateAltitudeChangeChart = () => {
         name: '飞行高度',
         type: 'line',
         data: altitudes,
-        smooth: true,
+        smooth: false,
         lineStyle: {
           color: '#1890ff',
           width: 3
@@ -758,16 +762,8 @@ const updateAltitudeChangeChart = () => {
         itemStyle: {
           color: '#1890ff'
         },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(24, 144, 255, 0.6)' },
-            { offset: 1, color: 'rgba(24, 144, 255, 0.1)' }
-          ])
-        },
         label: {
-          show: true,
-          position: 'top',
-          formatter: '{c} 米'
+          show: false
         }
       }
     ]
