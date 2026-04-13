@@ -21,6 +21,9 @@
           <a-button type="default" style="margin-left: 16px;" @click="toggleTracking">
             <ScanOutlined /> {{ trackingEnabled ? '停止追踪' : '开始追踪' }}
           </a-button>
+          <a-button type="primary" style="margin-left: 16px;" @click="startAIRecognition">
+            <ScanOutlined /> AI识别
+          </a-button>
         </div>
       </div>
       <div class="map3d-content">
@@ -171,7 +174,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed, onUnmounted } from 'vue'
-import { droneAPI, Drone } from '../services/api'
+import { droneAPI, routeAPI, Drone, Route } from '../services/api'
 import { SyncOutlined, GlobalOutlined, EditOutlined, CloseOutlined, SaveOutlined, DeleteOutlined, DownloadOutlined, ScanOutlined } from '@ant-design/icons-vue'
 
 // 无人机数据
@@ -402,14 +405,34 @@ const saveWaypoint = () => {
 }
 
 // 保存航线
-const saveRoute = () => {
+const saveRoute = async () => {
   if (waypoints.value.length < 2) {
     alert('请至少添加两个航点')
     return
   }
 
-  console.log('保存航线:', waypoints.value)
-  alert('航线保存成功')
+  try {
+    if (selectedDrone.value === 'all' || !selectedDroneInfo.value) {
+      alert('请选择一个无人机')
+      return
+    }
+
+    // 创建航线数据
+    const routeData = {
+      name: `航线 ${new Date().toLocaleString()}`,
+      description: `由无人机 ${selectedDroneInfo.value.name} 规划的航线`,
+      waypoints: JSON.stringify(waypoints.value),
+      droneId: selectedDroneInfo.value.id
+    }
+
+    // 保存航线到数据库
+    const savedRoute = await routeAPI.createRoute(routeData)
+    console.log('航线保存成功:', savedRoute)
+    alert('航线保存成功')
+  } catch (error) {
+    console.error('保存航线失败:', error)
+    alert('保存航线失败: ' + error.message)
+  }
 }
 
 // 下载KMZ文件
@@ -656,13 +679,15 @@ const clearTrajectories = () => {
   droneTrajectories.value = {}
 }
 
+
+
 // 无人机位置状态
 const droneStates = ref({
-  1: { base: [116.397428, 39.90923], direction: Math.random() * 360, speed: 10 + Math.random() * 5 },
-  2: { base: [121.473701, 31.230416], direction: Math.random() * 360, speed: 10 + Math.random() * 5 },
-  3: { base: [113.264385, 23.129111], direction: Math.random() * 360, speed: 10 + Math.random() * 5 },
-  4: { base: [114.057868, 22.543099], direction: Math.random() * 360, speed: 10 + Math.random() * 5 },
-  5: { base: [120.15507, 30.274085], direction: Math.random() * 360, speed: 10 + Math.random() * 5 }
+  1: { base: [118.0597, 36.8007], direction: Math.random() * 360, speed: 10 + Math.random() * 5 }, // 张店区
+  2: { base: [117.9597, 36.7007], direction: Math.random() * 360, speed: 10 + Math.random() * 5 }, // 淄川区
+  3: { base: [117.8597, 36.6007], direction: Math.random() * 360, speed: 10 + Math.random() * 5 }, // 博山区
+  4: { base: [118.3597, 36.8507], direction: Math.random() * 360, speed: 10 + Math.random() * 5 }, // 临淄区
+  5: { base: [117.8597, 36.7507], direction: Math.random() * 360, speed: 10 + Math.random() * 5 }  // 周村区
 })
 
 // 无人机航点跟踪状态
@@ -733,15 +758,15 @@ const simulatePositionData = () => {
       const droneId = drone.id
       // 初始化无人机状态
       if (!droneStates.value[droneId]) {
-        // 为每个无人机设置不同的初始位置
+        // 为每个无人机设置不同的初始位置 - 淄博市各区
         const locationMap: Record<string, [number, number]> = {
-          '北京': [116.397428, 39.90923],
-          '上海': [121.473701, 31.230416],
-          '广州': [113.264385, 23.129111],
-          '深圳': [114.057868, 22.543099],
-          '杭州': [120.15507, 30.274085]
+          '淄博市张店区': [118.0597, 36.8007],
+          '淄博市淄川区': [117.9597, 36.7007],
+          '淄博市博山区': [117.8597, 36.6007],
+          '淄博市临淄区': [118.3597, 36.8507],
+          '淄博市周村区': [117.8597, 36.7507]
         }
-        const base = locationMap[drone.location] || [116.397428, 39.90923]
+        const base = locationMap[drone.location] || [118.0597, 36.8007]
         droneStates.value[droneId] = { base: base, direction: Math.random() * 360, speed: 10 + Math.random() * 5 }
       }
       
@@ -790,15 +815,15 @@ watch(selectedDrone, (newValue) => {
     updateMapMarkers()
     // 定位到选中的无人机
     if (selectedDroneInfo.value && map) {
-      // 模拟无人机位置坐标
+      // 模拟无人机位置坐标 - 淄博市各区
       const locationMap: Record<string, [number, number]> = {
-        '北京': [116.397428, 39.90923],
-        '上海': [121.473701, 31.230416],
-        '广州': [113.264385, 23.129111],
-        '深圳': [114.057868, 22.543099],
-        '杭州': [120.15507, 30.274085]
+        '淄博市张店区': [118.0597, 36.8007],
+        '淄博市淄川区': [117.9597, 36.7007],
+        '淄博市博山区': [117.8597, 36.6007],
+        '淄博市临淄区': [118.3597, 36.8507],
+        '淄博市周村区': [117.8597, 36.7507]
       }
-      const position = locationMap[selectedDroneInfo.value.location] || [116.397428, 39.90923]
+      const position = locationMap[selectedDroneInfo.value.location] || [118.0597, 36.8007]
       // 设置地图中心为无人机位置
       map.setCenter(position)
       // 调整地图缩放级别
@@ -807,6 +832,123 @@ watch(selectedDrone, (newValue) => {
   }
 })
 
+// 加载淄博市边界
+const loadZiboBoundary = () => {
+  if (!map) return
+
+  // 淄博市边界坐标（更准确的实际边界）
+  const ziboBoundary = [
+    [117.7000, 37.1500], // 高青县西北部
+    [118.0000, 37.1500], // 桓台县北部
+    [118.4000, 37.1000], // 临淄区东北部
+    [118.4000, 36.8500], // 临淄区南部
+    [118.2000, 36.7000], // 张店区东部
+    [118.1000, 36.5000], // 博山区东南部
+    [117.9000, 36.3000], // 沂源县南部
+    [117.7000, 36.4000], // 沂源县西部
+    [117.6000, 36.6000], // 博山区西部
+    [117.6000, 36.8000], // 周村区西部
+    [117.7000, 37.0000], // 高青县西南部
+    [117.7000, 37.1500]  // 回到起点
+  ]
+
+  // 绘制淄博市边界
+  const ziboPolyline = new AMap.Polyline({
+    path: ziboBoundary,
+    strokeColor: '#ff0000',
+    strokeWeight: 4,
+    strokeOpacity: 0.8,
+    lineJoin: 'round'
+  })
+  ziboPolyline.setMap(map)
+
+  // 绘制各个区的边界（更准确的实际边界）
+  const districts = {
+    '张店区': [
+      [117.9500, 36.7500], // 西部边界
+      [118.1500, 36.7500], // 东部边界
+      [118.1500, 36.8500], // 北部边界
+      [117.9500, 36.8500], // 南部边界
+      [117.9500, 36.7500]  // 回到起点
+    ],
+    '淄川区': [
+      [117.8500, 36.6500], // 西部边界
+      [118.0000, 36.6500], // 东部边界
+      [118.0000, 36.7500], // 北部边界
+      [117.8500, 36.7500], // 南部边界
+      [117.8500, 36.6500]  // 回到起点
+    ],
+    '博山区': [
+      [117.7500, 36.5000], // 西部边界
+      [117.9500, 36.5000], // 东部边界
+      [117.9500, 36.6500], // 北部边界
+      [117.7500, 36.6500], // 南部边界
+      [117.7500, 36.5000]  // 回到起点
+    ],
+    '临淄区': [
+      [118.2000, 36.7500], // 西部边界
+      [118.4500, 36.7500], // 东部边界
+      [118.4500, 37.0500], // 北部边界
+      [118.2000, 37.0500], // 南部边界
+      [118.2000, 36.7500]  // 回到起点
+    ],
+    '周村区': [
+      [117.7000, 36.7000], // 西部边界
+      [117.9000, 36.7000], // 东部边界
+      [117.9000, 36.8000], // 北部边界
+      [117.7000, 36.8000], // 南部边界
+      [117.7000, 36.7000]  // 回到起点
+    ],
+    '桓台区': [
+      [117.9000, 36.8500], // 西部边界
+      [118.1500, 36.8500], // 东部边界
+      [118.1500, 37.1000], // 北部边界
+      [117.9000, 37.1000], // 南部边界
+      [117.9000, 36.8500]  // 回到起点
+    ],
+    '高青区': [
+      [117.6000, 37.0000], // 西部边界
+      [117.9000, 37.0000], // 东部边界
+      [117.9000, 37.1500], // 北部边界
+      [117.6000, 37.1500], // 南部边界
+      [117.6000, 37.0000]  // 回到起点
+    ],
+    '沂源区': [
+      [117.7000, 36.1500], // 西部边界
+      [118.1000, 36.1500], // 东部边界
+      [118.1000, 36.4500], // 北部边界
+      [117.7000, 36.4500], // 南部边界
+      [117.7000, 36.1500]  // 回到起点
+    ]
+  }
+
+  // 为每个区绘制边界
+  Object.entries(districts).forEach(([name, boundary]) => {
+    const districtPolyline = new AMap.Polyline({
+      path: boundary,
+      strokeColor: '#0000ff',
+      strokeWeight: 2,
+      strokeOpacity: 0.6,
+      lineJoin: 'round'
+    })
+    districtPolyline.setMap(map)
+
+    // 计算区域中心点
+    const center = {
+      lng: boundary.reduce((sum, point) => sum + point[0], 0) / boundary.length,
+      lat: boundary.reduce((sum, point) => sum + point[1], 0) / boundary.length
+    }
+
+    // 添加区名称标记
+    const marker = new AMap.Marker({
+      position: [center.lng, center.lat],
+      content: `<div style="background-color: white; padding: 4px; border-radius: 4px; font-size: 12px;">${name}</div>`,
+      anchor: 'bottom-center'
+    })
+    marker.setMap(map)
+  })
+}
+
 // 初始化地图
 const initMap = () => {
   // 加载高德地图API
@@ -814,13 +956,14 @@ const initMap = () => {
   script.type = 'text/javascript'
   script.src = 'https://webapi.amap.com/maps?v=2.0&key=50dd5fa2e6ca9a17cdcbf727f2568928&plugin=AMap.3DMap,AMap.Terrain,AMap.Polyline,AMap.Marker,AMap.ToolBar,AMap.Scale,AMap.OverviewMap'
   script.onload = () => {
-    // 初始化3D地图
+    // 初始化3D地图 - 淄博市坐标
     map = new AMap.Map('map3d', {
-      zoom: 13,
-      center: [116.397428, 39.90923], // 默认北京
+      zoom: 10,
+      center: [118.0597, 36.8007], // 淄博市张店区坐标
       viewMode: '3D', // 开启3D模式
       pitch: 60, // 俯仰角
-      rotation: 0 // 旋转角
+      rotation: 0, // 旋转角
+      zooms: [10, 18] // 限制缩放范围，聚焦淄博市
     })
 
     // 添加控件
@@ -831,6 +974,9 @@ const initMap = () => {
     } catch (error) {
       console.error('Failed to add controls:', error)
     }
+
+    // 加载淄博市边界
+    loadZiboBoundary()
 
     // 加载无人机数据
     loadDrones()
@@ -939,6 +1085,38 @@ const getDroneIcon = (status: string): string => {
     default:
       return 'https://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-default.png'
   }
+}
+
+// 开始AI识别
+const startAIRecognition = () => {
+  if (selectedDrone.value === 'all' || !selectedDroneInfo.value) {
+    alert('请选择一个无人机进行AI识别')
+    return
+  }
+
+  // 模拟AI识别过程
+  alert('开始AI识别...')
+
+  // 模拟AI识别结果
+  setTimeout(() => {
+    // 随机生成AI识别结果
+    const recognitionResults = [
+      { type: '人员密集', level: '高', location: selectedDroneInfo.value.location, confidence: 0.92 },
+      { type: '火灾感应', level: '低', location: selectedDroneInfo.value.location, confidence: 0.35 },
+      { type: '违法垂钓', level: '无', location: selectedDroneInfo.value.location, confidence: 0.12 }
+    ]
+
+    // 显示识别结果
+    let resultMessage = `无人机 ${selectedDroneInfo.value.name} AI识别结果：\n\n`
+    recognitionResults.forEach(result => {
+      resultMessage += `${result.type}: ${result.level} (置信度: ${(result.confidence * 100).toFixed(0)}%)\n`
+    })
+
+    alert(resultMessage)
+
+    // 可以在这里添加更多逻辑，比如将识别结果保存到数据库
+    console.log('AI识别结果:', recognitionResults)
+  }, 2000)
 }
 
 // 页面加载时初始化地图

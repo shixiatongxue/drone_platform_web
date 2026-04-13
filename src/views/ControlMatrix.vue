@@ -17,9 +17,14 @@
             <span class="drone-name">{{ drone.name }}</span>
             <span class="drone-status" :class="drone.status">{{ drone.status }}</span>
           </div>
-          <a-button type="link" size="small" @click.stop="startCameraForDrone(drone)">
-            {{ getCameraStatus(drone.id) }}
-          </a-button>
+          <div class="drone-actions">
+            <a-button type="link" size="small" @click.stop="startCameraForDrone(drone)">
+              {{ getCameraStatus(drone.id) }}
+            </a-button>
+            <a-button type="link" size="small" @click.stop="viewDroneRoutes(drone)">
+              查看航线
+            </a-button>
+          </div>
         </div>
       </div>
       
@@ -33,6 +38,9 @@
               <div class="window-controls">
                 <a-button type="text" size="small" @click="toggleCamera(index)" :disabled="!window.stream">
                   {{ window.isPlaying ? '暂停' : '播放' }}
+                </a-button>
+                <a-button type="text" size="small" @click="captureScreenshot(index)" :disabled="!window.stream">
+                  截图
                 </a-button>
                 <a-button type="text" size="small" danger @click="closeVideoWindow(index)">
                   关闭
@@ -62,15 +70,44 @@
         </div>
       </div>
     </div>
+    
+    <!-- 航线信息模态框 -->
+    <a-modal
+      v-model:visible="routeModalVisible"
+      title="航线信息"
+      @cancel="routeModalVisible = false"
+    >
+      <div v-if="selectedRoute" class="route-info">
+        <a-descriptions bordered>
+          <a-descriptions-item label="航线ID">{{ selectedRoute.id }}</a-descriptions-item>
+          <a-descriptions-item label="航线名称">{{ selectedRoute.name }}</a-descriptions-item>
+          <a-descriptions-item label="描述">{{ selectedRoute.description }}</a-descriptions-item>
+          <a-descriptions-item label="无人机">
+            {{ selectedRoute ? (drones.find(d => d.id === selectedRoute.droneId)?.name || selectedRoute.droneId) : '未知' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="创建时间">{{ selectedRoute.createdAt }}</a-descriptions-item>
+          <a-descriptions-item label="更新时间">{{ selectedRoute.updatedAt }}</a-descriptions-item>
+        </a-descriptions>
+        <div style="margin-top: 20px">
+          <h4>航点信息</h4>
+          <pre>{{ selectedRoute.waypoints }}</pre>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { droneAPI, Drone } from '../services/api'
+import { droneAPI, routeAPI, Drone, Route } from '../services/api'
 
 // 无人机数据
 const drones = ref<Drone[]>([])
+
+// 航线数据
+const routes = ref<Route[]>([])
+const selectedRoute = ref<Route | null>(null)
+const routeModalVisible = ref(false)
 
 // 视频窗口数据
 interface VideoWindow {
@@ -113,10 +150,117 @@ const loadDrones = async () => {
   }
 }
 
+// 加载航线数据
+const loadRoutes = async () => {
+  try {
+    routes.value = await routeAPI.getRoutes()
+  } catch (error) {
+    console.error('Failed to load routes:', error)
+  }
+}
+
 // 选择无人机
 const selectDrone = (drone: Drone) => {
   console.log('Selected drone:', drone)
   // 可以在这里实现地图高亮等功能
+}
+
+// 查看无人机航线信息
+const viewDroneRoutes = (drone: Drone) => {
+  // 过滤该无人机的航线
+  const droneRoutes = routes.value.filter(route => route.droneId === drone.id)
+  if (droneRoutes.length > 0) {
+    selectedRoute.value = droneRoutes[0] // 显示第一条航线
+    routeModalVisible.value = true
+  } else {
+    alert('该无人机暂无航线信息')
+  }
+}
+
+// 截图功能
+const captureScreenshot = async (index: number) => {
+  const videoElement = videoElements.value[index]
+  if (!videoElement) return
+  
+  try {
+    // 创建 canvas 元素
+    const canvas = document.createElement('canvas')
+    canvas.width = videoElement.videoWidth
+    canvas.height = videoElement.videoHeight
+    
+    // 绘制视频帧到 canvas
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
+      
+      // 转换为图片
+      canvas.toBlob(async (blob) => {
+        if (blob) {
+          // 生成文件名
+          const timestamp = new Date().getTime()
+          const filename = `screenshot_${timestamp}.png`
+          
+          // 创建 FormData 并添加文件
+          const formData = new FormData()
+          formData.append('file', blob, filename)
+          formData.append('title', `截图 - ${videoWindows.value[index].droneName}`)
+          formData.append('description', `从 ${videoWindows.value[index].droneName} 直播中截图`)
+          formData.append('droneId', videoWindows.value[index].droneId?.toString() || '0')
+          formData.append('captureTime', new Date().toISOString())
+          
+          try {
+            // 上传到服务器
+            const response = await fetch('/api/photos/upload', {
+              method: 'POST',
+              body: formData
+            })
+            
+            if (response.ok) {
+              // 同时下载到本地
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = filename
+              document.body.appendChild(a)
+              a.click()
+              document.body.removeChild(a)
+              URL.revokeObjectURL(url)
+              
+              alert('截图成功并已保存到照片管理')
+            } else {
+              // 如果上传失败，至少下载到本地
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = filename
+              document.body.appendChild(a)
+              a.click()
+              document.body.removeChild(a)
+              URL.revokeObjectURL(url)
+              
+              alert('截图成功但保存到照片管理失败')
+            }
+          } catch (error) {
+            console.error('上传截图失败:', error)
+            // 如果上传失败，至少下载到本地
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+            
+            alert('截图成功但保存到照片管理失败')
+          }
+        }
+      })
+    }
+  } catch (error) {
+    console.error('截图失败:', error)
+    alert('截图失败: ' + error.message)
+  }
 }
 
 // 获取摄像头状态
@@ -236,6 +380,7 @@ const clearAllWindows = () => {
 // 组件挂载时加载数据
 onMounted(() => {
   loadDrones()
+  loadRoutes()
 })
 
 // 组件卸载时清理
@@ -306,6 +451,12 @@ onUnmounted(() => {
 
 .drone-item:hover {
   background-color: #f5f5f5;
+}
+
+.drone-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .drone-info {

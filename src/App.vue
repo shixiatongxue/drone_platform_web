@@ -10,29 +10,41 @@
         :selected-keys="[currentRoute]"
         @select="handleMenuSelect"
       >
+        <a-menu-item key="/users">
+          <UserOutlined />
+          <span>用户管理</span>
+        </a-menu-item>
         <a-menu-item key="/drones">
-          <template #icon><RobotOutlined /></template>
-          无人机管理
+          <RobotOutlined />
+          <span>无人机管理</span>
         </a-menu-item>
         <a-menu-item key="/tasks">
-          <template #icon><ScheduleOutlined /></template>
-          任务管理
+          <ScheduleOutlined />
+          <span>任务管理</span>
         </a-menu-item>
         <a-menu-item key="/flight-data">
-          <template #icon><AreaChartOutlined /></template>
-          飞行数据
+          <AreaChartOutlined />
+          <span>飞行数据</span>
         </a-menu-item>
         <a-menu-item key="/map3d">
-          <template #icon><EnvironmentOutlined /></template>
-          3D态势图
+          <EnvironmentOutlined />
+          <span>3D态势图</span>
         </a-menu-item>
         <a-menu-item key="/control-matrix">
-          <template #icon><ControlOutlined /></template>
-          指挥矩阵
+          <ControlOutlined />
+          <span>指挥矩阵</span>
         </a-menu-item>
-        <a-menu-item key="/users">
-          <template #icon><UserOutlined /></template>
-          用户管理
+        <a-menu-item key="/routes">
+          <LineChartOutlined />
+          <span>航线管理</span>
+        </a-menu-item>
+        <a-menu-item key="/media">
+          <VideoCameraOutlined />
+          <span>媒体管理</span>
+        </a-menu-item>
+        <a-menu-item key="/recognition">
+          <RobotOutlined />
+          <span>识别数据</span>
         </a-menu-item>
       </a-menu>
     </a-layout-sider>
@@ -68,7 +80,7 @@
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router'
 import { ref, computed, onMounted } from 'vue'
-import { RobotOutlined, ScheduleOutlined, AreaChartOutlined, EnvironmentOutlined, ControlOutlined, SettingOutlined, BellOutlined, UserOutlined } from '@ant-design/icons-vue'
+import { RobotOutlined, ScheduleOutlined, AreaChartOutlined, EnvironmentOutlined, ControlOutlined, SettingOutlined, BellOutlined, UserOutlined, LineChartOutlined, VideoCameraOutlined, CameraOutlined } from '@ant-design/icons-vue'
 
 const router = useRouter()
 const route = useRoute()

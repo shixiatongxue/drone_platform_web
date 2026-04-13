@@ -6,6 +6,9 @@ import Map3D from '../views/Map3D.vue'
 import ControlMatrix from '../views/ControlMatrix.vue'
 import Login from '../views/Login.vue'
 import Users from '../views/Users.vue'
+import Routes from '../views/Routes.vue'
+import MediaManagement from '../views/MediaManagement.vue'
+import RecognitionData from '../views/RecognitionData.vue'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -52,6 +55,24 @@ const routes: RouteRecordRaw[] = [
     path: '/users',
     name: 'users',
     component: Users,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/routes',
+    name: 'routes',
+    component: Routes,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/media',
+    name: 'media',
+    component: MediaManagement,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/recognition',
+    name: 'recognition',
+    component: RecognitionData,
     meta: { requiresAuth: true }
   }
 ]
