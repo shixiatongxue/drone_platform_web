@@ -32,7 +32,7 @@
       <div class="video-matrix">
         <h3>视频矩阵</h3>
         <div class="matrix-grid" :style="gridStyle">
-          <div class="video-window" v-for="(window, index) in videoWindows" :key="index">
+          <div class="video-window" v-for="(window, index) in videoWindows" :key="window.id">
             <div class="video-header">
               <span class="window-title">{{ window.title }}</span>
               <div class="window-controls">
@@ -42,13 +42,16 @@
                 <a-button type="text" size="small" @click="captureScreenshot(index)" :disabled="!window.stream">
                   截图
                 </a-button>
+                <a-button type="text" size="small" @click="toggleAiEvents(index)">
+                  {{ window.showAiEvents ? '隐藏AI识别' : '显示AI识别' }}
+                </a-button>
                 <a-button type="text" size="small" danger @click="closeVideoWindow(index)">
                   关闭
                 </a-button>
               </div>
             </div>
             <div class="video-content">
-              <video ref="videoElements" :ref="el => setVideoRef(el, index)" autoplay playsinline muted></video>
+              <video :ref="el => setVideoRef(el, window.id)" autoplay playsinline muted></video>
               <div class="video-placeholder" v-if="!window.stream">
                 <p>点击开始直播</p>
                 <a-button type="primary" @click="startCamera(index)">开始直播</a-button>
@@ -58,6 +61,29 @@
               <div class="overlay-info">
                 <span>无人机: {{ window.droneName }}</span>
                 <span>状态: {{ window.isPlaying ? '直播中' : '已暂停' }}</span>
+              </div>
+            </div>
+            
+            <!-- AI识别内容卡片 -->
+            <div class="ai-events-container" v-if="window.showAiEvents && window.aiEvents.length > 0">
+              <div class="ai-events-header">
+                <span>AI识别内容</span>
+                <span class="ai-events-count">{{ window.aiEvents.length }} 条</span>
+              </div>
+              <div class="ai-events-list">
+                <div class="ai-event-card" v-for="event in window.aiEvents" :key="event.id">
+                  <div class="ai-event-header">
+                    <span class="ai-event-type">{{ event.eventType }}</span>
+                    <span class="ai-event-time">{{ event.eventTime }}</span>
+                  </div>
+                  <div class="ai-event-content">
+                    <p class="ai-event-description">{{ event.description }}</p>
+                    <div class="ai-event-footer">
+                      <span class="ai-event-status" :class="event.status">{{ event.status }}</span>
+                      <a-button type="text" size="small" @click="viewAiEventDetails(event)">查看详情</a-button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -109,6 +135,17 @@ const routes = ref<Route[]>([])
 const selectedRoute = ref<Route | null>(null)
 const routeModalVisible = ref(false)
 
+// AI识别内容接口
+interface AIEvent {
+  id: number
+  eventType: string
+  eventTime: string
+  location: string
+  description: string
+  evidenceUrl: string
+  status: string
+}
+
 // 视频窗口数据
 interface VideoWindow {
   id: number
@@ -117,10 +154,12 @@ interface VideoWindow {
   droneName: string
   stream: MediaStream | null
   isPlaying: boolean
+  aiEvents: AIEvent[]
+  showAiEvents: boolean
 }
 
 const videoWindows = ref<VideoWindow[]>([])
-const videoElements = ref<HTMLVideoElement[]>([])
+const videoElements = ref<Record<number, HTMLVideoElement>>({})
 const nextWindowId = ref(1)
 
 // 网格样式
@@ -135,9 +174,13 @@ const gridStyle = computed(() => {
 })
 
 // 设置视频元素引用
-const setVideoRef = (el: HTMLVideoElement | null, index: number) => {
-  if (el) {
-    videoElements.value[index] = el
+const setVideoRef = (el: HTMLVideoElement | null, windowId: number) => {
+  if (windowId) {
+    if (el) {
+      videoElements.value[windowId] = el
+    } else {
+      delete videoElements.value[windowId]
+    }
   }
 }
 
@@ -179,7 +222,8 @@ const viewDroneRoutes = (drone: Drone) => {
 
 // 截图功能
 const captureScreenshot = async (index: number) => {
-  const videoElement = videoElements.value[index]
+  const window = videoWindows.value[index]
+  const videoElement = videoElements.value[window.id]
   if (!videoElement) return
   
   try {
@@ -203,9 +247,9 @@ const captureScreenshot = async (index: number) => {
           // 创建 FormData 并添加文件
           const formData = new FormData()
           formData.append('file', blob, filename)
-          formData.append('title', `截图 - ${videoWindows.value[index].droneName}`)
-          formData.append('description', `从 ${videoWindows.value[index].droneName} 直播中截图`)
-          formData.append('droneId', videoWindows.value[index].droneId?.toString() || '0')
+          formData.append('title', `截图 - ${window.droneName}`)
+          formData.append('description', `从 ${window.droneName} 直播中截图`)
+          formData.append('droneId', window.droneId?.toString() || '0')
           formData.append('captureTime', new Date().toISOString())
           
           try {
@@ -289,13 +333,16 @@ const startCameraForDrone = async (drone: Drone) => {
     droneId: drone.id,
     droneName: drone.name,
     stream: null,
-    isPlaying: false
+    isPlaying: false,
+    aiEvents: [],
+    showAiEvents: true
   }
   videoWindows.value.push(newWindow)
   
   // 延迟启动摄像头，确保DOM已渲染
+  const windowIndex = videoWindows.value.length - 1
   setTimeout(() => {
-    startCamera(videoWindows.value.length - 1)
+    startCamera(windowIndex)
   }, 100)
 }
 
@@ -310,9 +357,19 @@ const startCamera = async (index: number) => {
     videoWindows.value[index].isPlaying = true
     
     // 设置视频源
-    if (videoElements.value[index]) {
-      videoElements.value[index].srcObject = stream
+    const windowId = videoWindows.value[index].id
+    
+    // 尝试设置视频源，如果视频元素不存在，则等待一段时间后再尝试
+    const setVideoSource = () => {
+      if (videoElements.value[windowId]) {
+        videoElements.value[windowId].srcObject = stream
+      } else {
+        // 等待100毫秒后再尝试
+        setTimeout(setVideoSource, 100)
+      }
     }
+    
+    setVideoSource()
   } catch (error) {
     console.error('Error accessing camera:', error)
     alert('无法访问摄像头，请检查权限设置')
@@ -326,17 +383,29 @@ const toggleCamera = (index: number) => {
   
   if (window.isPlaying) {
     // 暂停视频
-    if (videoElements.value[index]) {
-      videoElements.value[index].pause()
+    if (videoElements.value[window.id]) {
+      videoElements.value[window.id].pause()
     }
   } else {
     // 播放视频
-    if (videoElements.value[index]) {
-      videoElements.value[index].play()
+    if (videoElements.value[window.id]) {
+      videoElements.value[window.id].play()
     }
   }
   
   window.isPlaying = !window.isPlaying
+}
+
+// 切换AI识别内容显示
+const toggleAiEvents = (index: number) => {
+  videoWindows.value[index].showAiEvents = !videoWindows.value[index].showAiEvents
+}
+
+// 查看AI识别内容详情
+const viewAiEventDetails = (event: AIEvent) => {
+  console.log('View AI event details:', event)
+  // 这里可以实现查看详情的逻辑，比如显示一个模态框
+  alert(`事件类型: ${event.eventType}\n描述: ${event.description}\n状态: ${event.status}`)
 }
 
 // 关闭视频窗口
@@ -346,6 +415,9 @@ const closeVideoWindow = (index: number) => {
     // 停止摄像头
     window.stream.getTracks().forEach(track => track.stop())
   }
+  
+  // 从视频元素对象中删除对应的元素
+  delete videoElements.value[window.id]
   
   // 从数组中移除
   videoWindows.value.splice(index, 1)
@@ -359,7 +431,9 @@ const addVideoWindow = () => {
     droneId: null,
     droneName: '未绑定',
     stream: null,
-    isPlaying: false
+    isPlaying: false,
+    aiEvents: [],
+    showAiEvents: true
   }
   videoWindows.value.push(newWindow)
 }
@@ -375,6 +449,8 @@ const clearAllWindows = () => {
   
   // 清空窗口列表
   videoWindows.value = []
+  // 同时清空视频元素对象
+  videoElements.value = {}
 }
 
 // 组件挂载时加载数据
@@ -565,6 +641,18 @@ onUnmounted(() => {
   gap: 8px;
 }
 
+.window-controls .ant-btn-text {
+  color: #1890ff;
+}
+
+.window-controls .ant-btn-text:hover {
+  color: #40a9ff;
+}
+
+.window-controls .ant-btn-text[disabled] {
+  color: #bfbfbf;
+}
+
 .video-content {
   width: 100%;
   height: 100%;
@@ -606,6 +694,108 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
+/* AI识别内容样式 */
+.ai-events-container {
+  position: absolute;
+  bottom: 40px;
+  left: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  z-index: 10;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.ai-events-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  font-weight: 500;
+}
+
+.ai-events-count {
+  font-size: 12px;
+  color: #1890ff;
+}
+
+.ai-events-list {
+  padding: 8px;
+}
+
+.ai-event-card {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+}
+
+.ai-event-card:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.ai-event-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.ai-event-type {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.ai-event-time {
+  font-size: 12px;
+  color: #999;
+}
+
+.ai-event-content {
+  font-size: 12px;
+}
+
+.ai-event-description {
+  margin: 0 0 4px 0;
+  line-height: 1.4;
+}
+
+.ai-event-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.ai-event-status {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  text-align: center;
+  width: fit-content;
+}
+
+.ai-event-status.processed {
+  background-color: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.ai-event-status.pending {
+  background-color: #fff7e6;
+  color: #fa8c16;
+  border: 1px solid #ffd591;
+}
+
+.ai-event-status.failed {
+  background-color: #fff1f0;
+  color: #f5222d;
+  border: 1px solid #ffccc7;
+}
+
 /* 响应式设计 */
 @media (max-width: 1024px) {
   .control-matrix-content {
@@ -625,6 +815,10 @@ onUnmounted(() => {
   .matrix-grid {
     grid-template-columns: 1fr !important;
     grid-template-rows: repeat(auto-fill, minmax(200px, 1fr)) !important;
+  }
+  
+  .ai-events-container {
+    max-height: 150px;
   }
 }
 </style>

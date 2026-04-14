@@ -35,7 +35,7 @@
             <a-button size="small" @click="viewEventDetail(record)">查看详情</a-button>
           </template>
           <template #evidence="{ record }">
-            <a-image :src="record.evidenceUrl" width="100" height="100" />
+            <a-button size="small" @click="viewEventEvidence(record)">查看照片</a-button>
           </template>
           <template #status="{ record }">
             <a-badge 
@@ -168,6 +168,17 @@
         <a-image :src="selectedAreaEvidence" style="width: 100%" />
       </div>
     </a-modal>
+
+    <!-- 事件证据图片弹窗 -->
+    <a-modal
+      v-model:visible="eventEvidenceVisible"
+      title="事件证据图片"
+      @cancel="handleEventEvidenceCancel"
+    >
+      <div v-if="selectedEventEvidence" class="event-evidence-detail">
+        <a-image :src="selectedEventEvidence" style="width: 100%" />
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -207,6 +218,10 @@ const selectedPatrolArea = ref<any>(null);
 // 区域证据图片弹窗
 const areaEvidenceVisible = ref(false);
 const selectedAreaEvidence = ref<string>('');
+
+// 事件证据图片弹窗
+const eventEvidenceVisible = ref(false);
+const selectedEventEvidence = ref<string>('');
 
 // 表格列配置
 const eventColumns = [
@@ -416,6 +431,18 @@ const viewAreaEvidence = (area: any) => {
 const handleAreaEvidenceCancel = () => {
   areaEvidenceVisible.value = false;
   selectedAreaEvidence.value = '';
+};
+
+// 查看事件证据图片
+const viewEventEvidence = (event: any) => {
+  selectedEventEvidence.value = event.evidenceUrl || `https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20${event.eventDescription === '人员密集' ? 'crowd' : event.eventDescription === '浓烟火灾' ? 'fire' : 'fishing'}&image_size=square`;
+  eventEvidenceVisible.value = true;
+};
+
+// 关闭事件证据图片弹窗
+const handleEventEvidenceCancel = () => {
+  eventEvidenceVisible.value = false;
+  selectedEventEvidence.value = '';
 };
 
 // 搜索重点巡防区域

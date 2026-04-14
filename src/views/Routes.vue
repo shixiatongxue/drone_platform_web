@@ -154,15 +154,8 @@ const columns = [
   { title: '描述', dataIndex: 'description', key: 'description' },
   { 
     title: '无人机', 
-    dataIndex: 'droneId', 
-    key: 'droneId',
-    customRender: (text: number) => {
-      console.log('Rendering drone for droneId:', text);
-      console.log('Available drones:', drones.value);
-      const drone = drones.value.find(d => d.id === text);
-      console.log('Found drone:', drone);
-      return drone ? drone.name : text;
-    }
+    dataIndex: 'droneName', 
+    key: 'droneName'
   },
   { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt' },
   { title: '操作', key: 'action', slots: { customRender: 'action' } }

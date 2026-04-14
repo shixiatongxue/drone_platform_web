@@ -204,6 +204,7 @@ let map: any = null
 let markers: any[] = []
 let routeMarkers: any[] = []
 let routePolyline: any = null
+let flagMarker: any = null
 
 // 航点数据
 const waypoints = ref<any[]>([])
@@ -807,11 +808,19 @@ const simulatePositionData = () => {
 
 // 监听选中的无人机变化
 watch(selectedDrone, (newValue) => {
+  console.log('选中的无人机:', newValue)
   if (newValue === 'all') {
     selectedDroneInfo.value = null
     updateMapMarkers()
+    // 清除小旗子标记
+    if (flagMarker) {
+      console.log('清除小旗子标记')
+      flagMarker.remove()
+      flagMarker = null
+    }
   } else {
     selectedDroneInfo.value = drones.value.find(drone => drone.id === newValue) || null
+    console.log('选中的无人机信息:', selectedDroneInfo.value)
     updateMapMarkers()
     // 定位到选中的无人机
     if (selectedDroneInfo.value && map) {
@@ -823,11 +832,43 @@ watch(selectedDrone, (newValue) => {
         '淄博市临淄区': [118.3597, 36.8507],
         '淄博市周村区': [117.8597, 36.7507]
       }
+      console.log('无人机位置:', selectedDroneInfo.value.location)
+      console.log('位置映射:', locationMap[selectedDroneInfo.value.location])
       const position = locationMap[selectedDroneInfo.value.location] || [118.0597, 36.8007]
+      console.log('最终位置:', position)
       // 设置地图中心为无人机位置
       map.setCenter(position)
       // 调整地图缩放级别
       map.setZoom(15)
+      
+      // 清除旧的小旗子标记
+      if (flagMarker) {
+        console.log('清除旧的小旗子标记')
+        flagMarker.remove()
+        flagMarker = null
+      }
+      
+      console.log('创建小旗子标记，位置:', position, '无人机:', selectedDroneInfo.value.name)
+      // 创建小旗子标记
+      flagMarker = new AMap.Marker({
+        position: position,
+        icon: new AMap.Icon({
+          size: new AMap.Size(40, 40),
+          image: 'https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/images/marker-icon.png',
+          imageSize: new AMap.Size(40, 40)
+        }),
+        title: `无人机 ${selectedDroneInfo.value.name} 位置`,
+        anchor: 'bottom-center'
+      })
+      
+      // 添加小旗子标记到地图
+      flagMarker.setMap(map)
+      console.log('小旗子标记已添加到地图')
+      console.log('小旗子标记:', flagMarker)
+    } else {
+      console.log('selectedDroneInfo.value 或 map 为 null')
+      console.log('selectedDroneInfo.value:', selectedDroneInfo.value)
+      console.log('map:', map)
     }
   }
 })
@@ -994,6 +1035,12 @@ const cleanupMap = () => {
     markers.forEach(marker => marker.remove())
     routeMarkers.forEach(marker => marker.remove())
     
+    // 清除小旗子标记
+    if (flagMarker) {
+      flagMarker.remove()
+      flagMarker = null
+    }
+    
     // 清除航线
     if (routePolyline) {
       routePolyline.remove()
@@ -1028,8 +1075,13 @@ const updateMapMarkers = () => {
   const filteredDrones = selectedDrone.value === 'all' ? drones.value : drones.value.filter(drone => drone.id === selectedDrone.value)
 
   filteredDrones.forEach(drone => {
-    // 模拟无人机位置坐标
+    // 模拟无人机位置坐标 - 淄博市各区
     const locationMap: Record<string, [number, number]> = {
+      '淄博市张店区': [118.0597, 36.8007],
+      '淄博市淄川区': [117.9597, 36.7007],
+      '淄博市博山区': [117.8597, 36.6007],
+      '淄博市临淄区': [118.3597, 36.8507],
+      '淄博市周村区': [117.8597, 36.7507],
       '北京': [116.397428, 39.90923],
       '上海': [121.473701, 31.230416],
       '广州': [113.264385, 23.129111],
@@ -1037,13 +1089,18 @@ const updateMapMarkers = () => {
       '杭州': [120.15507, 30.274085]
     }
 
-    const position = locationMap[drone.location] || [116.397428, 39.90923]
+    const position = locationMap[drone.location] || [118.0597, 36.8007]
 
     // 创建标记
     const marker = new AMap.Marker({
       position: position,
       title: drone.name,
-      anchor: 'bottom-center'
+      anchor: 'bottom-center',
+      icon: new AMap.Icon({
+        size: new AMap.Size(30, 30),
+        image: getDroneIcon(drone.status),
+        imageSize: new AMap.Size(30, 30)
+      })
     })
 
     // 添加标记到地图
@@ -1060,15 +1117,60 @@ const updateMapMarkers = () => {
   // 如果只显示一个无人机，将地图中心移动到该无人机位置
   if (filteredDrones.length === 1) {
     const drone = filteredDrones[0]
+    // 模拟无人机位置坐标 - 淄博市各区
     const locationMap: Record<string, [number, number]> = {
+      '淄博市张店区': [118.0597, 36.8007],
+      '淄博市淄川区': [117.9597, 36.7007],
+      '淄博市博山区': [117.8597, 36.6007],
+      '淄博市临淄区': [118.3597, 36.8507],
+      '淄博市周村区': [117.8597, 36.7507],
       '北京': [116.397428, 39.90923],
       '上海': [121.473701, 31.230416],
       '广州': [113.264385, 23.129111],
       '深圳': [114.057868, 22.543099],
       '杭州': [120.15507, 30.274085]
     }
-    const position = locationMap[drone.location] || [116.397428, 39.90923]
+    const position = locationMap[drone.location] || [118.0597, 36.8007]
     map.setCenter(position)
+  }
+
+  // 确保小旗子标记仍然存在
+  if (selectedDrone.value !== 'all' && selectedDroneInfo.value && map) {
+    // 模拟无人机位置坐标 - 淄博市各区
+    const locationMap: Record<string, [number, number]> = {
+      '淄博市张店区': [118.0597, 36.8007],
+      '淄博市淄川区': [117.9597, 36.7007],
+      '淄博市博山区': [117.8597, 36.6007],
+      '淄博市临淄区': [118.3597, 36.8507],
+      '淄博市周村区': [117.8597, 36.7507],
+      '北京': [116.397428, 39.90923],
+      '上海': [121.473701, 31.230416],
+      '广州': [113.264385, 23.129111],
+      '深圳': [114.057868, 22.543099],
+      '杭州': [120.15507, 30.274085]
+    }
+    const position = locationMap[selectedDroneInfo.value.location] || [118.0597, 36.8007]
+    
+    // 清除旧的小旗子标记
+    if (flagMarker) {
+      flagMarker.remove()
+      flagMarker = null
+    }
+    
+    // 创建小旗子标记
+    flagMarker = new AMap.Marker({
+      position: position,
+      icon: new AMap.Icon({
+        size: new AMap.Size(40, 40),
+        image: 'https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/images/marker-icon.png',
+        imageSize: new AMap.Size(40, 40)
+      }),
+      title: `无人机 ${selectedDroneInfo.value.name} 位置`,
+      anchor: 'bottom-center'
+    })
+    
+    // 添加小旗子标记到地图
+    flagMarker.setMap(map)
   }
 }
 

@@ -111,16 +111,23 @@ const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id' },
   { title: '照片标题', dataIndex: 'title', key: 'title' },
   { title: '描述', dataIndex: 'description', key: 'description' },
-  { title: '文件路径', dataIndex: 'filePath', key: 'filePath' },
+  { 
+    title: '文件路径', 
+    dataIndex: 'filePath', 
+    key: 'filePath',
+    customRender: (text: string) => {
+      // 将实际路径转换为以D:/drone/photo开头的路径
+      if (text) {
+        return text.replace('D:/project/drone_platform_backend/photos', 'D:/drone/photo');
+      }
+      return text;
+    }
+  },
   { title: '预览', key: 'picture', slots: { customRender: 'picture' } },
   { 
     title: '无人机', 
-    dataIndex: 'droneId', 
-    key: 'droneId',
-    customRender: (text: number) => {
-      const drone = drones.value.find(d => d.id === text);
-      return drone ? drone.name : text;
-    }
+    dataIndex: 'droneName', 
+    key: 'droneName'
   },
   { title: '拍摄时间', dataIndex: 'captureTime', key: 'captureTime' },
   { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt' },

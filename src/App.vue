@@ -52,11 +52,9 @@
       <a-layout-header style="background: white; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); height: 64px;">
         <div class="header-content">
           <div class="header-left">
-            <a-dropdown>
-              <a-button type="primary">
-                <SettingOutlined /> 系统设置
-              </a-button>
-            </a-dropdown>
+            <h1 style="font-size: 18px; font-weight: bold; color: #1890ff; margin: 0;">
+              淄博市无人机低空巡逻预警系统
+            </h1>
           </div>
           <div class="header-right" v-if="user">
             <a-badge count="3" style="margin-right: 16px;">

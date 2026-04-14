@@ -123,16 +123,23 @@ const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id' },
   { title: '视频标题', dataIndex: 'title', key: 'title' },
   { title: '描述', dataIndex: 'description', key: 'description' },
-  { title: '文件路径', dataIndex: 'filePath', key: 'filePath' },
+  { 
+    title: '文件路径', 
+    dataIndex: 'filePath', 
+    key: 'filePath',
+    customRender: (text: string) => {
+      // 将实际路径转换为以D:/drone/video开头的路径
+      if (text) {
+        return text.replace('D:/project/drone_platform_backend/videos', 'D:/drone/video');
+      }
+      return text;
+    }
+  },
   { title: '时长（秒）', dataIndex: 'duration', key: 'duration' },
   { 
     title: '无人机', 
-    dataIndex: 'droneId', 
-    key: 'droneId',
-    customRender: (text: number) => {
-      const drone = drones.value.find(d => d.id === text);
-      return drone ? drone.name : text;
-    }
+    dataIndex: 'droneName', 
+    key: 'droneName'
   },
   { title: '录制开始时间', dataIndex: 'recordingStartTime', key: 'recordingStartTime' },
   { title: '录制结束时间', dataIndex: 'recordingEndTime', key: 'recordingEndTime' },

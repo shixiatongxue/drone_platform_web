@@ -1,4 +1,4 @@
-const API_BASE_URL = '/api';
+const API_BASE_URL = 'http://localhost:8082/api';
 
 // 通用请求方法
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -236,6 +236,7 @@ export interface Route {
   description: string;
   waypoints: string;
   droneId: number;
+  droneName?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -247,6 +248,7 @@ export interface Video {
   filePath: string;
   duration: number;
   droneId: number;
+  droneName?: string;
   recordingStartTime: string;
   recordingEndTime: string;
   createdAt?: string;
@@ -259,6 +261,7 @@ export interface Photo {
   description: string;
   filePath: string;
   droneId: number;
+  droneName?: string;
   captureTime: string;
   createdAt?: string;
   updatedAt?: string;
