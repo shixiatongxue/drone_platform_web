@@ -1,7 +1,7 @@
 <template>
   <div class="login-container">
     <div class="login-form">
-      <h2>无人机指挥驾驶舱</h2>
+      <h2>淄博市低空巡逻预警系统</h2>
       <h3>用户登录</h3>
       <div class="form-group">
         <label for="username">用户名</label>

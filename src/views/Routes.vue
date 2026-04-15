@@ -5,6 +5,14 @@
     <!-- 切换标签 -->
     <a-tabs v-model:active-key="activeTab" style="margin-bottom: 20px">
       <a-tab-pane tab="航线管理" key="routes">
+        <!-- 淄博市可视化地图（纯前端 GeoJSON 渲染，无需任何地图服务） -->
+        <a-card title="淄博市地图可视化" :bordered="false" style="margin-bottom: 16px;">
+          <div id="routes-zibo-map" style="width: 100%; height: 420px; border-radius: 12px; overflow: hidden;"></div>
+          <div style="margin-top: 8px; color: #666; font-size: 12px;">
+            数据来源：`public/zibo.geojson`（访问路径 `/zibo.geojson`）。
+          </div>
+        </a-card>
+
         <!-- 搜索和筛选 -->
         <div class="search-filter">
           <a-input v-model:value="searchKeyword" placeholder="搜索航线名称" style="width: 300px; margin-right: 10px" />
@@ -23,7 +31,12 @@
         </div>
 
         <!-- 航线列表 -->
-        <a-table :columns="columns" :data-source="filteredRoutes" row-key="id" style="margin-top: 20px">
+        <a-table
+          :columns="columns"
+          :data-source="filteredRoutes"
+          row-key="id"
+          style="margin-top: 20px"
+        >
           <template #action="{ record }">
             <a-button size="small" @click="showEditForm(record)">编辑</a-button>
             <a-button size="small" danger @click="deleteRoute(record.id)">删除</a-button>
@@ -110,9 +123,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
 import { routeAPI, droneAPI, patrolAreaAPI, Route, Drone, PatrolArea } from '../services/api';
 import type { FormInstance } from 'ant-design-vue';
+import * as echarts from 'echarts';
 
 // 数据
 const routes = ref<Route[]>([]);
@@ -172,6 +186,96 @@ const patrolAreaColumns = [
   { title: '操作', key: 'action', slots: { customRender: 'action' } }
 ];
 
+// 淄博市可视化地图（ECharts + GeoJSON）
+let ziboChart: echarts.ECharts | null = null;
+let resizeObserver: ResizeObserver | null = null;
+
+const initZiboEcharts = async () => {
+  const el = document.getElementById('routes-zibo-map');
+  if (!el) return;
+
+  if (!ziboChart) {
+    ziboChart = echarts.init(el, undefined, { renderer: 'canvas' });
+  }
+
+  const resp = await fetch('/zibo.geojson', { cache: 'no-store' });
+  if (!resp.ok) throw new Error('无法加载 /zibo.geojson');
+  const geojson = await resp.json();
+
+  echarts.registerMap('zibo', geojson);
+
+  const districtNames: string[] = (geojson?.features || [])
+    .map((f: any) => f?.properties?.name)
+    .filter(Boolean);
+
+  const palette = ['#2f54eb', '#13c2c2', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#eb2f96', '#1677ff'];
+  const regions = districtNames.map((name) => {
+    const hash = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    const color = palette[hash % palette.length];
+    return {
+      name,
+      itemStyle: { areaColor: color, opacity: 0.25 },
+      emphasis: { itemStyle: { areaColor: color, opacity: 0.45 } }
+    };
+  });
+
+  ziboChart.setOption({
+    backgroundColor: {
+      type: 'linear',
+      x: 0,
+      y: 0,
+      x2: 0,
+      y2: 1,
+      colorStops: [
+        { offset: 0, color: '#0b1220' },
+        { offset: 1, color: '#060a13' }
+      ]
+    },
+    tooltip: {
+      trigger: 'item',
+      formatter: (p: any) => `<div style="padding:4px 6px;"><b>${p?.name || ''}</b></div>`
+    },
+    geo: {
+      map: 'zibo',
+      roam: true,
+      zoom: 1.15,
+      layoutCenter: ['50%', '52%'],
+      layoutSize: '110%',
+      label: { show: true, color: 'rgba(255,255,255,0.88)', fontSize: 12 },
+      itemStyle: {
+        borderColor: 'rgba(22, 119, 255, 0.8)',
+        borderWidth: 1.5,
+        areaColor: 'rgba(24, 144, 255, 0.10)'
+      },
+      emphasis: {
+        label: { color: '#ffffff', fontWeight: 'bold' },
+        itemStyle: {
+          borderColor: '#ff4d4f',
+          borderWidth: 2.2,
+          shadowBlur: 12,
+          shadowColor: 'rgba(0,0,0,0.35)'
+        }
+      },
+      regions
+    },
+    series: [
+      {
+        type: 'map',
+        map: 'zibo',
+        roam: false,
+        selectedMode: false,
+        label: { show: false },
+        itemStyle: { borderColor: 'rgba(255,255,255,0.12)', borderWidth: 1 },
+        emphasis: { itemStyle: { borderColor: '#ffffff', borderWidth: 1.5 } }
+      }
+    ]
+  } as any);
+
+  resizeObserver?.disconnect();
+  resizeObserver = new ResizeObserver(() => ziboChart?.resize());
+  resizeObserver.observe(el);
+};
+
 // 过滤后的航线列表
 const filteredRoutes = computed(() => {
   return routes.value.filter(route => {
@@ -195,6 +299,14 @@ onMounted(async () => {
   await loadDrones();
   await loadRoutes();
   await loadPatrolAreas();
+  await initZiboEcharts();
+});
+
+onUnmounted(() => {
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  ziboChart?.dispose();
+  ziboChart = null;
 });
 
 // 当无人机列表加载完成后，重新渲染表格

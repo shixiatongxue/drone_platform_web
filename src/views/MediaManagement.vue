@@ -13,10 +13,9 @@
               {{ drone.name }}
             </a-select-option>
           </a-select>
-          <a-date-picker
+          <a-range-picker
             v-model:value="videoDateRange"
-            type="range"
-            placeholder="选择时间范围"
+            show-time
             style="width: 400px; margin-right: 10px"
           />
           <a-button type="primary" @click="searchVideos">查询</a-button>
@@ -30,6 +29,9 @@
 
         <!-- 视频列表 -->
         <a-table :columns="videoColumns" :data-source="videos" row-key="id" style="margin-top: 20px">
+          <template #videoMedia="{ record }">
+            <a-button size="small" @click="viewVideo(record)">查看视频</a-button>
+          </template>
           <template #videoAction="{ record }">
             <a-button size="small" @click="showVideoEditForm(record)">编辑</a-button>
             <a-button size="small" danger @click="deleteVideo(record.id)">删除</a-button>
@@ -45,10 +47,9 @@
               {{ drone.name }}
             </a-select-option>
           </a-select>
-          <a-date-picker
+          <a-range-picker
             v-model:value="photoDateRange"
-            type="range"
-            placeholder="选择时间范围"
+            show-time
             style="width: 400px; margin-right: 10px"
           />
           <a-button type="primary" @click="searchPhotos">查询</a-button>
@@ -62,12 +63,12 @@
 
         <!-- 照片列表 -->
         <a-table :columns="photoColumns" :data-source="photos" row-key="id" style="margin-top: 20px">
+          <template #photoMedia="{ record }">
+            <a-button size="small" @click="viewPhoto(record)">查看照片</a-button>
+          </template>
           <template #photoAction="{ record }">
             <a-button size="small" @click="showPhotoEditForm(record)">编辑</a-button>
             <a-button size="small" danger @click="deletePhoto(record.id)">删除</a-button>
-          </template>
-          <template #picture="{ record }">
-            <a-image :src="record.filePath" width="100" height="100" />
           </template>
         </a-table>
       </a-tab-pane>
@@ -153,6 +154,22 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 媒体预览弹窗 -->
+    <a-modal
+      v-model:visible="previewVisible"
+      :title="previewTitle"
+      @cancel="handlePreviewCancel"
+      :footer="null"
+      width="900px"
+    >
+      <div v-if="previewType === 'video'">
+        <video :src="previewUrl" controls style="width: 100%; max-height: 560px; background: #000" />
+      </div>
+      <div v-else>
+        <a-image :src="previewUrl" style="width: 100%" />
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -201,13 +218,13 @@ const videoColumns = [
   { title: 'ID', dataIndex: 'id', key: 'id' },
   { title: '视频标题', dataIndex: 'title', key: 'title' },
   { title: '描述', dataIndex: 'description', key: 'description' },
-  { title: '文件路径', dataIndex: 'filePath', key: 'filePath' },
+  { title: '视频', key: 'videoMedia', slots: { customRender: 'videoMedia' } },
   { title: '时长（秒）', dataIndex: 'duration', key: 'duration' },
   { 
     title: '无人机', 
     dataIndex: 'droneId', 
     key: 'droneId',
-    customRender: (text: number) => {
+    customRender: ({ text }: { text: number }) => {
       const drone = drones.value.find(d => d.id === text);
       return drone ? drone.name : text;
     }
@@ -249,13 +266,12 @@ const photoColumns = [
   { title: 'ID', dataIndex: 'id', key: 'id' },
   { title: '照片标题', dataIndex: 'title', key: 'title' },
   { title: '描述', dataIndex: 'description', key: 'description' },
-  { title: '文件路径', dataIndex: 'filePath', key: 'filePath' },
-  { title: '预览', key: 'picture', slots: { customRender: 'picture' } },
+  { title: '照片', key: 'photoMedia', slots: { customRender: 'photoMedia' } },
   { 
     title: '无人机', 
     dataIndex: 'droneId', 
     key: 'droneId',
-    customRender: (text: number) => {
+    customRender: ({ text }: { text: number }) => {
       const drone = drones.value.find(d => d.id === text);
       return drone ? drone.name : text;
     }
@@ -264,6 +280,12 @@ const photoColumns = [
   { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt' },
   { title: '操作', key: 'action', slots: { customRender: 'photoAction' } }
 ];
+
+// 媒体预览状态
+const previewVisible = ref(false);
+const previewType = ref<'video' | 'photo'>('photo');
+const previewUrl = ref('');
+const previewTitle = ref('');
 
 // 生命周期
 onMounted(() => {
@@ -302,15 +324,36 @@ const loadPhotos = async () => {
 // 搜索视频
 const searchVideos = async () => {
   try {
-    if (videoSelectedDroneId.value && videoDateRange.value) {
-      const startTime = videoDateRange.value[0].toISOString();
-      const endTime = videoDateRange.value[1].toISOString();
-      videos.value = await videoAPI.getVideosByTimeRange(videoSelectedDroneId.value as number, startTime, endTime);
-    } else if (videoSelectedDroneId.value) {
-      videos.value = await videoAPI.getVideosByDroneId(videoSelectedDroneId.value as number);
-    } else {
-      loadVideos();
+    const hasDrone = videoSelectedDroneId.value !== '' && videoSelectedDroneId.value !== null && videoSelectedDroneId.value !== undefined;
+    const hasRange = Array.isArray(videoDateRange.value) && videoDateRange.value.length === 2;
+
+    if (hasDrone && hasRange) {
+      const droneId = Number(videoSelectedDroneId.value);
+      const startTime = videoDateRange.value![0].toISOString();
+      const endTime = videoDateRange.value![1].toISOString();
+      videos.value = await videoAPI.getVideosByTimeRange(droneId, startTime, endTime);
+      return;
     }
+
+    if (hasDrone) {
+      const droneId = Number(videoSelectedDroneId.value);
+      videos.value = await videoAPI.getVideosByDroneId(droneId);
+      return;
+    }
+
+    if (hasRange) {
+      // 没有按时间范围的“全局视频”接口，先本地过滤
+      const all = await videoAPI.getVideos();
+      const start = videoDateRange.value![0];
+      const end = videoDateRange.value![1];
+      videos.value = all.filter(v => {
+        const t = dayjs(v.recordingStartTime);
+        return t.isAfter(start) && t.isBefore(end);
+      });
+      return;
+    }
+
+    await loadVideos();
   } catch (error) {
     console.error('Failed to search videos:', error);
   }
@@ -326,15 +369,36 @@ const resetVideoFilters = () => {
 // 搜索照片
 const searchPhotos = async () => {
   try {
-    if (photoSelectedDroneId.value && photoDateRange.value) {
-      const startTime = photoDateRange.value[0].toISOString();
-      const endTime = photoDateRange.value[1].toISOString();
-      photos.value = await photoAPI.getPhotosByTimeRange(photoSelectedDroneId.value as number, startTime, endTime);
-    } else if (photoSelectedDroneId.value) {
-      photos.value = await photoAPI.getPhotosByDroneId(photoSelectedDroneId.value as number);
-    } else {
-      loadPhotos();
+    const hasDrone = photoSelectedDroneId.value !== '' && photoSelectedDroneId.value !== null && photoSelectedDroneId.value !== undefined;
+    const hasRange = Array.isArray(photoDateRange.value) && photoDateRange.value.length === 2;
+
+    if (hasDrone && hasRange) {
+      const droneId = Number(photoSelectedDroneId.value);
+      const startTime = photoDateRange.value![0].toISOString();
+      const endTime = photoDateRange.value![1].toISOString();
+      photos.value = await photoAPI.getPhotosByTimeRange(droneId, startTime, endTime);
+      return;
     }
+
+    if (hasDrone) {
+      const droneId = Number(photoSelectedDroneId.value);
+      photos.value = await photoAPI.getPhotosByDroneId(droneId);
+      return;
+    }
+
+    if (hasRange) {
+      // 没有按时间范围的“全局照片”接口，先本地过滤
+      const all = await photoAPI.getPhotos();
+      const start = photoDateRange.value![0];
+      const end = photoDateRange.value![1];
+      photos.value = all.filter(p => {
+        const t = dayjs(p.captureTime);
+        return t.isAfter(start) && t.isBefore(end);
+      });
+      return;
+    }
+
+    await loadPhotos();
   } catch (error) {
     console.error('Failed to search photos:', error);
   }
@@ -345,6 +409,36 @@ const resetPhotoFilters = () => {
   photoSelectedDroneId.value = '';
   photoDateRange.value = null;
   loadPhotos();
+};
+
+const resolveMediaUrl = (filePath: string) => {
+  if (!filePath) return '';
+  if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+    return filePath;
+  }
+  if (filePath.startsWith('/')) {
+    return `http://localhost:8082${filePath}`;
+  }
+  return `http://localhost:8082/${filePath}`;
+};
+
+const viewVideo = (video: Video) => {
+  previewType.value = 'video';
+  previewTitle.value = `视频预览 - ${video.title || video.id}`;
+  previewUrl.value = resolveMediaUrl(video.filePath);
+  previewVisible.value = true;
+};
+
+const viewPhoto = (photo: Photo) => {
+  previewType.value = 'photo';
+  previewTitle.value = `照片预览 - ${photo.title || photo.id}`;
+  previewUrl.value = resolveMediaUrl(photo.filePath);
+  previewVisible.value = true;
+};
+
+const handlePreviewCancel = () => {
+  previewVisible.value = false;
+  previewUrl.value = '';
 };
 
 // 显示视频新增表单

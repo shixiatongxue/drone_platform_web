@@ -1183,7 +1183,8 @@ const getDroneIcon = (status: string): string => {
     case 'flying':
       return 'https://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-red.png'
     case 'offline':
-      return 'https://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-grey.png'
+      // 使用可用的默认图标，避免灰色图标资源失效导致标记不显示
+      return 'https://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-default.png'
     default:
       return 'https://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-default.png'
   }

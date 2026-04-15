@@ -98,17 +98,17 @@
         <a-descriptions bordered>
           <a-descriptions-item label="事件ID">{{ selectedEvent.id }}</a-descriptions-item>
           <a-descriptions-item label="无人机">{{ getDroneName(selectedEvent.droneId) }}</a-descriptions-item>
-          <a-descriptions-item label="事件类型">{{ selectedEvent.eventDescription }}</a-descriptions-item>
+          <a-descriptions-item label="事件类型">{{ selectedEvent.eventType }}</a-descriptions-item>
           <a-descriptions-item label="事件时间">{{ selectedEvent.eventTime }}</a-descriptions-item>
           <a-descriptions-item label="事件地点">{{ formatLocation(selectedEvent.location) }}</a-descriptions-item>
-          <a-descriptions-item label="事件描述">{{ selectedEvent.eventDescription }}</a-descriptions-item>
-          <a-descriptions-item label="人员密集程度">{{ selectedEvent.crowdDensity || '未检测' }}</a-descriptions-item>
-          <a-descriptions-item label="火灾风险">{{ selectedEvent.fireRisk || '未检测' }}</a-descriptions-item>
-          <a-descriptions-item label="违法垂钓情况">{{ selectedEvent.fishingViolation || '未检测' }}</a-descriptions-item>
+          <a-descriptions-item label="事件描述">{{ selectedEvent.description }}</a-descriptions-item>
+          <a-descriptions-item label="人员密集程度">{{ selectedEvent.eventType === '人员密集' ? '高' : '低' }}</a-descriptions-item>
+          <a-descriptions-item label="火灾风险">{{ selectedEvent.eventType === '火灾感应' ? '高' : '低' }}</a-descriptions-item>
+          <a-descriptions-item label="违法垂钓情况">{{ selectedEvent.eventType === '违法垂钓' ? '高' : '无' }}</a-descriptions-item>
           <a-descriptions-item label="状态">
             <a-badge 
-              :status="selectedEvent.status === '正常' ? 'success' : 'error'" 
-              :text="selectedEvent.status" 
+              :status="selectedEvent.status === 'processed' ? 'error' : 'success'" 
+              :text="selectedEvent.status === 'processed' ? '异常' : selectedEvent.status" 
             />
           </a-descriptions-item>
           <a-descriptions-item label="创建时间">{{ selectedEvent.createdAt }}</a-descriptions-item>
@@ -199,11 +199,16 @@ const selectedDistrict = ref<string>('');
 const areaDateRange = ref<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
 const activeTab = ref('events');
 
-// 计算属性：过滤异常事件
+// 计算属性：过滤异常事件（基于真实AI事件）
 const filteredEvents = computed(() => {
-  return patrolAreas.value.filter(area => {
-    // 只显示异常事件
-    return area.status === '异常';
+  return events.value.filter((event: any) => {
+    const matchDrone = !selectedDroneId.value || event.droneId === Number(selectedDroneId.value);
+    const matchType = !selectedEventType.value || event.eventType === selectedEventType.value;
+    const matchDate = !dateRange.value || (() => {
+      const eventTime = dayjs(event.eventTime);
+      return eventTime.isAfter(dateRange.value![0]) && eventTime.isBefore(dateRange.value![1]);
+    })();
+    return matchDrone && matchType && matchDate;
   });
 });
 
@@ -230,22 +235,26 @@ const eventColumns = [
     title: '无人机', 
     dataIndex: 'droneId', 
     key: 'droneId',
-    customRender: (text: number) => {
+    customRender: ({ text }: { text: number }) => {
       const drone = drones.value.find(d => d.id === text);
       return drone ? drone.name : text;
     }
   },
-  { title: '事件类型', dataIndex: 'eventDescription', key: 'eventDescription' },
+  { title: '事件类型', dataIndex: 'eventType', key: 'eventType' },
   { title: '事件时间', dataIndex: 'eventTime', key: 'eventTime' },
   { 
     title: '事件地点', 
     dataIndex: 'location', 
     key: 'location',
-    customRender: (text: any) => {
-      return formatLocation(text);
+    customRender: ({ text }: { text: any }) => {
+      // 优先匹配重点巡防区域名称（与重点巡防区域/航线管理一致）
+      const matchedArea = patrolAreas.value.find((area: any) => {
+        return typeof area?.name === 'string' && typeof text === 'string' && text.includes(area.name);
+      });
+      return matchedArea?.name || formatLocation(text);
     }
   },
-  { title: '事件描述', dataIndex: 'eventDescription', key: 'eventDescription' },
+  { title: '事件描述', dataIndex: 'description', key: 'description' },
   { title: '状态', key: 'status', slots: { customRender: 'status' } },
   { title: '证据', key: 'evidence', slots: { customRender: 'evidence' } },
   { title: '操作', key: 'action', slots: { customRender: 'action' } }
@@ -258,7 +267,7 @@ const patrolAreaColumns = [
     title: '无人机', 
     dataIndex: 'droneId', 
     key: 'droneId',
-    customRender: (text: number) => {
+    customRender: ({ text }: { text: number }) => {
       const drone = drones.value.find(d => d.id === text);
       return drone ? drone.name : text;
     }
@@ -268,8 +277,9 @@ const patrolAreaColumns = [
     title: '地点', 
     dataIndex: 'location', 
     key: 'location',
-    customRender: (text: any) => {
-      return formatLocation(text);
+    customRender: ({ record }: { record: any }) => {
+      // 重点巡防区域记录地点固定显示区域名称，确保与航线管理中的区域名称一致
+      return record?.name || '';
     }
   },
   { title: '事件描述', dataIndex: 'eventDescription', key: 'eventDescription' },
@@ -309,42 +319,7 @@ const loadEvents = async () => {
 const loadPatrolAreas = async () => {
   try {
     const result = await patrolAreaAPI.getPatrolAreas();
-    // 为每个重点巡防区域添加无人机ID和AI检测数据（临时解决方案）
-    const areasWithData = result.map((area, index) => {
-      const crowdDensity = ['低', '中等', '高'][Math.floor(Math.random() * 3)];
-      const fireRisk = ['低', '中等', '高'][Math.floor(Math.random() * 3)];
-      const fishingViolation = ['无', '低', '中等', '高'][Math.floor(Math.random() * 4)];
-      // 为异常区域添加证据图片
-      let evidenceUrl = '';
-      let eventDescription = '一切正常';
-      if (crowdDensity === '高' || fireRisk === '高' || fishingViolation === '高') {
-        if (crowdDensity === '高') {
-          evidenceUrl = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20crowd%20people&image_size=square';
-          eventDescription = '人员密集';
-        } else if (fireRisk === '高') {
-          evidenceUrl = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20fire%20smoke&image_size=square';
-          eventDescription = '浓烟火灾';
-        } else if (fishingViolation === '高') {
-          evidenceUrl = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20fishing%20person&image_size=square';
-          eventDescription = '违法垂钓';
-        }
-      }
-      // 生成随机时间（最近24小时内）
-      const randomTime = new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000);
-      return {
-        ...area,
-        droneId: (index % 5) + 1, // 分配无人机ID
-        crowdDensity,
-        fireRisk,
-        fishingViolation,
-        evidenceUrl,
-        eventTime: randomTime.toISOString(), // 事件时间
-        location: area.name, // 地点（使用区域名称）
-        eventDescription, // 事件描述
-        status: isAreaNormal({ crowdDensity, fireRisk, fishingViolation }) ? '正常' : '异常' // 状态
-      };
-    });
-    patrolAreas.value = areasWithData;
+    patrolAreas.value = buildPatrolAreaRecords(result);
     console.log('Patrol areas loaded:', patrolAreas.value);
   } catch (error) {
     console.error('Failed to load patrol areas:', error);
@@ -354,44 +329,14 @@ const loadPatrolAreas = async () => {
 // 搜索事件
 const searchEvents = async () => {
   try {
-    const result = await patrolAreaAPI.searchPatrolAreas(selectedEventType.value, '');
-    // 为每个重点巡防区域添加无人机ID和AI检测数据
-    const areasWithData = result.map((area, index) => {
-      const crowdDensity = ['低', '中等', '高'][Math.floor(Math.random() * 3)];
-      const fireRisk = ['低', '中等', '高'][Math.floor(Math.random() * 3)];
-      const fishingViolation = ['无', '低', '中等', '高'][Math.floor(Math.random() * 4)];
-      // 为异常区域添加证据图片
-      let evidenceUrl = '';
-      let eventDescription = '一切正常';
-      if (crowdDensity === '高' || fireRisk === '高' || fishingViolation === '高') {
-        if (crowdDensity === '高') {
-          evidenceUrl = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20crowd%20people&image_size=square';
-          eventDescription = '人员密集';
-        } else if (fireRisk === '高') {
-          evidenceUrl = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20fire%20smoke&image_size=square';
-          eventDescription = '浓烟火灾';
-        } else if (fishingViolation === '高') {
-          evidenceUrl = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20fishing%20person&image_size=square';
-          eventDescription = '违法垂钓';
-        }
-      }
-      // 生成随机时间（最近24小时内）
-      const randomTime = new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000);
-      return {
-        ...area,
-        droneId: (index % 5) + 1, // 分配无人机ID
-        crowdDensity,
-        fireRisk,
-        fishingViolation,
-        evidenceUrl,
-        eventTime: randomTime.toISOString(), // 事件时间
-        location: area.name, // 地点（使用区域名称）
-        eventDescription, // 事件描述
-        status: isAreaNormal({ crowdDensity, fireRisk, fishingViolation }) ? '正常' : '异常' // 状态
-      };
+    const result = await aiEventsAPI.searchAIEvents({
+      droneId: selectedDroneId.value ? Number(selectedDroneId.value) : undefined,
+      eventType: selectedEventType.value || undefined,
+      startDate: dateRange.value ? dateRange.value[0].toISOString() : undefined,
+      endDate: dateRange.value ? dateRange.value[1].toISOString() : undefined
     });
-    patrolAreas.value = areasWithData;
-    console.log('Events searched:', patrolAreas.value);
+    events.value = result;
+    console.log('Events searched:', events.value);
   } catch (error) {
     console.error('Failed to search events:', error);
   }
@@ -402,7 +347,7 @@ const resetFilters = () => {
   selectedDroneId.value = '';
   selectedEventType.value = '';
   dateRange.value = null;
-  loadPatrolAreas();
+  loadEvents();
 };
 
 // 重置重点巡防区域筛选条件
@@ -421,9 +366,7 @@ const isAreaNormal = (area: any): boolean => {
 
 // 查看区域证据图片
 const viewAreaEvidence = (area: any) => {
-  // 这里可以根据区域ID获取对应的证据图片
-  // 暂时使用模拟数据
-  selectedAreaEvidence.value = area.evidenceUrl || `https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20${area.crowdDensity === '高' ? 'crowd' : area.fireRisk === '高' ? 'fire' : 'fishing'}&image_size=square`;
+  selectedAreaEvidence.value = area.evidenceUrl || '';
   areaEvidenceVisible.value = true;
 };
 
@@ -435,7 +378,7 @@ const handleAreaEvidenceCancel = () => {
 
 // 查看事件证据图片
 const viewEventEvidence = (event: any) => {
-  selectedEventEvidence.value = event.evidenceUrl || `https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20${event.eventDescription === '人员密集' ? 'crowd' : event.eventDescription === '浓烟火灾' ? 'fire' : 'fishing'}&image_size=square`;
+  selectedEventEvidence.value = event.evidenceUrl || '';
   eventEvidenceVisible.value = true;
 };
 
@@ -449,46 +392,55 @@ const handleEventEvidenceCancel = () => {
 const searchPatrolAreas = async () => {
   try {
     const result = await patrolAreaAPI.searchPatrolAreas(areaSearchKeyword.value, selectedDistrict.value);
-    // 为每个重点巡防区域添加无人机ID和AI检测数据（临时解决方案）
-    const areasWithData = result.map((area, index) => {
-      const crowdDensity = ['低', '中等', '高'][Math.floor(Math.random() * 3)];
-      const fireRisk = ['低', '中等', '高'][Math.floor(Math.random() * 3)];
-      const fishingViolation = ['无', '低', '中等', '高'][Math.floor(Math.random() * 4)];
-      // 为异常区域添加证据图片
-      let evidenceUrl = '';
-      let eventDescription = '一切正常';
-      if (crowdDensity === '高' || fireRisk === '高' || fishingViolation === '高') {
-        if (crowdDensity === '高') {
-          evidenceUrl = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20crowd%20people&image_size=square';
-          eventDescription = '人员密集';
-        } else if (fireRisk === '高') {
-          evidenceUrl = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20fire%20smoke&image_size=square';
-          eventDescription = '浓烟火灾';
-        } else if (fishingViolation === '高') {
-          evidenceUrl = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=drone%20ai%20detection%20fishing%20person&image_size=square';
-          eventDescription = '违法垂钓';
-        }
-      }
-      // 生成随机时间（最近24小时内）
-      const randomTime = new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000);
-      return {
-        ...area,
-        droneId: (index % 5) + 1, // 分配无人机ID
-        crowdDensity,
-        fireRisk,
-        fishingViolation,
-        evidenceUrl,
-        eventTime: randomTime.toISOString(), // 事件时间
-        location: area.name, // 地点（使用区域名称）
-        eventDescription, // 事件描述
-        status: isAreaNormal({ crowdDensity, fireRisk, fishingViolation }) ? '正常' : '异常' // 状态
-      };
-    });
-    patrolAreas.value = areasWithData;
+    patrolAreas.value = buildPatrolAreaRecords(result);
     console.log('Patrol areas searched:', patrolAreas.value);
   } catch (error) {
     console.error('Failed to search patrol areas:', error);
   }
+};
+
+// 根据区域和事件构建重点巡防记录，保证无人机与地点稳定对应
+const buildPatrolAreaRecords = (areas: PatrolArea[]) => {
+  const dronesByDistrict: Record<string, number> = {};
+  drones.value.forEach((drone) => {
+    const district = ['张店区', '淄川区', '博山区', '临淄区', '周村区', '桓台区', '高青区', '沂源区']
+      .find((d) => drone.location.includes(d));
+    if (district && !dronesByDistrict[district]) {
+      dronesByDistrict[district] = drone.id;
+    }
+  });
+
+  const areaEventMap: Record<number, any> = {};
+  events.value.forEach((event: any) => {
+    const exactArea = areas.find((area) => event.description?.includes(area.name));
+    if (exactArea) {
+      areaEventMap[exactArea.id] = event;
+      return;
+    }
+    const drone = drones.value.find((d) => d.id === event.droneId);
+    if (!drone) return;
+    const districtArea = areas.find((area) => drone.location.includes(area.district));
+    if (districtArea && !areaEventMap[districtArea.id]) {
+      areaEventMap[districtArea.id] = event;
+    }
+  });
+
+  return areas.map((area) => {
+    const matchedEvent = areaEventMap[area.id];
+    const hasAbnormal = !!matchedEvent;
+    return {
+      ...area,
+      droneId: matchedEvent?.droneId || dronesByDistrict[area.district] || 1,
+      eventTime: matchedEvent?.eventTime || area.updatedAt || area.createdAt,
+      location: area.name,
+      eventDescription: matchedEvent?.eventType || '一切正常',
+      evidenceUrl: matchedEvent?.evidenceUrl || '',
+      crowdDensity: matchedEvent?.eventType === '人员密集' ? '高' : '低',
+      fireRisk: matchedEvent?.eventType === '火灾感应' ? '高' : '低',
+      fishingViolation: matchedEvent?.eventType === '违法垂钓' ? '高' : '无',
+      status: hasAbnormal ? '异常' : '正常'
+    };
+  });
 };
 
 // 查看事件详情
